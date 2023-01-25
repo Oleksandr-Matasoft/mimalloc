@@ -36,6 +36,13 @@ terms of the MIT license. A copy of the license can be found in the file
 #define  mi_memory_order(name)  mi_memory_order_##name
 #else
 // Use C11 atomics
+
+#ifdef _ZARM64
+// #error "C11 atomics"
+#include <newlib.h>
+#include <stdint.h>
+#endif
+
 #include <stdatomic.h>
 #define  mi_atomic(name)        atomic_##name
 #define  mi_memory_order(name)  memory_order_##name

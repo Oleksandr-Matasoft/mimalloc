@@ -14,7 +14,7 @@ terms of the MIT license. A copy of the license can be found in the file
 
 
 #include <string.h>  // memset, strlen
-#include <stdlib.h>  // malloc, exit
+#include <stdlib.h>  // malloc, exit, abort
 
 #define MI_IN_ALLOC_C
 #include "alloc-override.c"
@@ -885,7 +885,11 @@ static bool mi_try_new_handler(bool nothrow) {
   if (h==NULL) {
     _mi_error_message(ENOMEM, "out of memory in 'new'");
     if (!nothrow) {
+      #ifdef _ZARM64
+      abort();
+      #else
       throw std::bad_alloc();
+      #endif
     }
     return false;
   }

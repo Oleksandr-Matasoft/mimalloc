@@ -8,6 +8,10 @@ terms of the MIT license. A copy of the license can be found in the file
 #define _DEFAULT_SOURCE   // for syscall() on Linux
 #endif
 
+#ifdef _ZARCH64
+#define __NEWLIB__
+#endif
+#include <newlib.h>
 #include "mimalloc.h"
 #include "mimalloc-internal.h"
 
@@ -293,6 +297,11 @@ static bool os_random_buf(void* buf, size_t buf_len) {
 #elif defined(__APPLE__)
 #include <mach/mach_time.h>
 #else
+
+#ifndef _POSIX_MONOTONIC_CLOCK
+#define _POSIX_MONOTONIC_CLOCK 1
+#endif
+
 #include <time.h>
 #endif
 
