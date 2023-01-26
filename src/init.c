@@ -5,10 +5,17 @@ terms of the MIT license. A copy of the license can be found in the file
 "LICENSE" at the root of this distribution.
 -----------------------------------------------------------------------------*/
 #include "mimalloc.h"
+#include "mimalloc-atomic.h"
 #include "mimalloc-internal.h"
 
 #include <string.h>  // memcpy, memset
 #include <stdlib.h>  // atexit
+
+#ifdef _ZARM64
+/* Keys for thread-specific data */
+typedef unsigned int pthread_key_t;
+#endif
+
 
 // Empty page used to initialize the small free pages array
 const mi_page_t _mi_page_empty = {

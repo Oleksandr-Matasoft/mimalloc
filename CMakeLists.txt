@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 project(libmimalloc C CXX)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
-
 option(
     MI_SECURE
     "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)"
@@ -521,6 +518,7 @@ if(MI_BUILD_STATIC)
     set_property(TARGET mimalloc-static PROPERTY POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(mimalloc-static PRIVATE ${mi_defines}
                                                        MI_STATIC_LIB)
+    add_definitions(-DMADV_DONTNEED)
     target_compile_options(mimalloc-static PRIVATE ${mi_cflags})
     target_link_libraries(mimalloc-static PRIVATE ${mi_libraries})
     target_include_directories(

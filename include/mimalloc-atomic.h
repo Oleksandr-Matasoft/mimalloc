@@ -17,6 +17,13 @@ terms of the MIT license. A copy of the license can be found in the file
 // instead of passing the memory order as a parameter.
 // -----------------------------------------------------------------------------------------------
 
+// #ifdef _ZARM64
+// // expect "C11 atomics" and avoid error { .__val = (value) } // error: field name not in record or union initializer
+// #include <newlib.h>
+// #include <stdint.h>
+// #define ATOMIC_VAR_INIT(x) x
+// #endif
+
 #if defined(__cplusplus)
 // Use C++ atomics
 #include <atomic>
@@ -24,9 +31,15 @@ terms of the MIT license. A copy of the license can be found in the file
 #define  mi_atomic(name)        std::atomic_##name
 #define  mi_memory_order(name)  std::memory_order_##name
 #if !defined(ATOMIC_VAR_INIT) || (__cplusplus >= 202002L) // c++20, see issue #571
- #define MI_ATOMIC_VAR_INIT(x)  x
+ #define MI_ATOMIC_VAR_INIT(x) x
 #else
- #define MI_ATOMIC_VAR_INIT(x)  ATOMIC_VAR_INIT(x)
+
+#ifdef _ZARM64
+#define MI_ATOMIC_VAR_INIT(x) x
+#else
+#define MI_ATOMIC_VAR_INIT(x)  ATOMIC_VAR_INIT(x)
+#endif
+
 #endif
 #elif defined(_MSC_VER)
 // Use MSVC C wrapper for C11 atomics
@@ -36,17 +49,17 @@ terms of the MIT license. A copy of the license can be found in the file
 #define  mi_memory_order(name)  mi_memory_order_##name
 #else
 // Use C11 atomics
-
-#ifdef _ZARM64
-// #error "C11 atomics"
-#include <newlib.h>
 #include <stdint.h>
-#endif
-
 #include <stdatomic.h>
 #define  mi_atomic(name)        atomic_##name
 #define  mi_memory_order(name)  memory_order_##name
-#define  MI_ATOMIC_VAR_INIT(x)  ATOMIC_VAR_INIT(x)
+
+#ifdef _ZARM64
+#define MI_ATOMIC_VAR_INIT(x) x
+#else
+#define MI_ATOMIC_VAR_INIT(x)  ATOMIC_VAR_INIT(x)
+#endif
+
 #endif
 
 // Various defines for all used memory orders in mimalloc

@@ -13,10 +13,19 @@ terms of the MIT license. A copy of the license can be found in the file
 #include "mimalloc.h"
 #include "mimalloc-internal.h"
 #include "mimalloc-atomic.h"
-
+#include <stdint.h>
+#include <stddef.h>
+#include <stdatomic.h>
 #include "bitmap.h"  // atomic bitmap
 
 //#define MI_CACHE_DISABLE 1    // define to completely disable the segment cache
+
+#ifdef _ZARM64
+#ifdef ATOMIC_VAR_INIT
+#undef ATOMIC_VAR_INIT
+#define ATOMIC_VAR_INIT(x) x
+#endif
+#endif
 
 #define MI_CACHE_FIELDS     (16)
 #define MI_CACHE_MAX        (MI_BITMAP_FIELD_BITS*MI_CACHE_FIELDS)       // 1024 on 64-bit
@@ -34,7 +43,7 @@ typedef struct mi_cache_slot_s {
 } mi_cache_slot_t;
 
 static mi_decl_cache_align mi_cache_slot_t cache[MI_CACHE_MAX];    // = 0
-
+//__attribute__((aligned(64)))
 static mi_decl_cache_align mi_bitmap_field_t cache_available[MI_CACHE_FIELDS] = { MI_CACHE_BITS_SET };        // zero bit = available!
 static mi_decl_cache_align mi_bitmap_field_t cache_available_large[MI_CACHE_FIELDS] = { MI_CACHE_BITS_SET };
 static mi_decl_cache_align mi_bitmap_field_t cache_inuse[MI_CACHE_FIELDS];   // zero bit = free
