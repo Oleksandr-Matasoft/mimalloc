@@ -20,12 +20,6 @@ terms of the MIT license. A copy of the license can be found in the file
 
 //#define MI_CACHE_DISABLE 1    // define to completely disable the segment cache
 
-#ifdef _ZARM64
-#ifdef ATOMIC_VAR_INIT
-#undef ATOMIC_VAR_INIT
-#define ATOMIC_VAR_INIT(x) x
-#endif
-#endif
 
 #define MI_CACHE_FIELDS     (16)
 #define MI_CACHE_MAX        (MI_BITMAP_FIELD_BITS*MI_CACHE_FIELDS)       // 1024 on 64-bit
