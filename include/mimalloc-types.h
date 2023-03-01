@@ -22,6 +22,10 @@ terms of the MIT license. A copy of the license can be found in the file
 #define MI_MAX_ALIGN_SIZE  16   // sizeof(max_align_t)
 #endif
 
+#ifdef _ZARM64
+#include <zephyr/kernel.h>
+#endif
+
 // ------------------------------------------------------
 // Variants
 // ------------------------------------------------------

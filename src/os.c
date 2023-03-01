@@ -35,7 +35,9 @@ terms of the MIT license. A copy of the license can be found in the file
 #elif defined(__wasi__)
 #include <unistd.h>    // sbrk
 #else
+#ifndef _ZARM64
 #include <sys/mman.h>  // mmap
+#endif
 #include <unistd.h>    // sysconf
 #if defined(__linux__)
 #include <features.h>
@@ -60,6 +62,10 @@ terms of the MIT license. A copy of the license can be found in the file
 #endif
 #include <sys/sysctl.h>
 #endif
+#endif
+
+#ifdef _ZARM64
+#include <zephyr/kernel.h>
 #endif
 
 /* -----------------------------------------------------------
@@ -107,11 +113,13 @@ size_t _mi_os_large_page_size(void) {
 }
 
 #if !defined(MI_USE_SBRK) && !defined(__wasi__)
+#ifndef _ZARM64
 static bool use_large_os_page(size_t size, size_t alignment) {
   // if we have access, check the size and alignment requirements
   if (large_os_page_size == 0 || !mi_option_is_enabled(mi_option_large_os_pages)) return false;
   return ((size % large_os_page_size) == 0 && (alignment % large_os_page_size) == 0);
 }
+#endif // _ZARM64
 #endif
 
 // round to a good OS allocation size (bounded by max 12.5% waste)
@@ -252,6 +260,7 @@ void _mi_os_init(void) {
 
 #else  // generic unix
 
+// TODO (omatasov): check overcommit on _ZARM64
 static void os_detect_overcommit(void) {
 #if defined(__linux__)
   int fd = open("/proc/sys/vm/overcommit_memory", O_RDONLY);
@@ -276,28 +285,44 @@ static void os_detect_overcommit(void) {
 }
 
 void _mi_os_init(void) {
-  // get the page size
-  long result = sysconf(_SC_PAGESIZE);
-  if (result > 0) {
+
+#ifndef _ZARM64
+    // get the page size
+    long result = sysconf(_SC_PAGESIZE);
+    if (result > 0)
+    {
+        os_page_size = (size_t)result;
+        os_alloc_granularity = os_page_size;
+    }
+    large_os_page_size = 2 * MI_MiB;
+#else
+    // explicitly set alloc size
+    // TODO: can we query the OS for this?
+    long result = 4 * 1024;
     os_page_size = (size_t)result;
     os_alloc_granularity = os_page_size;
-  }
-  large_os_page_size = 2*MI_MiB; // TODO: can we query the OS for this?
-  os_detect_overcommit();
+    large_os_page_size = 64 * 1024;
+#endif
+    os_detect_overcommit();
 }
 #endif
 
 
+#ifndef _ZARM64
 #if defined(MADV_NORMAL)
-static int mi_madvise(void* addr, size_t length, int advice) {
-  #if defined(__sun)
-  return madvise((caddr_t)addr, length, advice);  // Solaris needs cast (issue #520)
-  #else
-  return madvise(addr, length, advice);
-  #endif
-}
+// static int mi_madvise(void *addr, size_t length, int advice)
+// {
+//     #if defined(__sun)
+//     return madvise(
+//             (caddr_t)addr,
+//             length,
+//             advice); // Solaris needs cast (issue #520)
+//     #else
+//     return madvise(addr, length, advice);
+//     #endif
+// }
 #endif
-
+#endif
 
 /* -----------------------------------------------------------
   aligned hinting
@@ -355,38 +380,30 @@ static void* mi_os_get_aligned_hint(size_t try_alignment, size_t size) {
 
 static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats_t* stats)
 {
-  if (addr == NULL || size == 0) return true; // || _mi_os_is_huge_reserved(addr)
-  bool err = false;
-#if defined(_WIN32)
-  DWORD errcode = 0;
-  err = (VirtualFree(addr, 0, MEM_RELEASE) == 0);
-  if (err) { errcode = GetLastError(); }
-  if (errcode == ERROR_INVALID_ADDRESS) {
-    // In mi_os_mem_alloc_aligned the fallback path may have returned a pointer inside
-    // the memory region returned by VirtualAlloc; in that case we need to free using
-    // the start of the region.
-    MEMORY_BASIC_INFORMATION info = { 0 };
-    VirtualQuery(addr, &info, sizeof(info));
-    if (info.AllocationBase < addr && ((uint8_t*)addr - (uint8_t*)info.AllocationBase) < (ptrdiff_t)MI_SEGMENT_SIZE) {
-      errcode = 0;
-      err = (VirtualFree(info.AllocationBase, 0, MEM_RELEASE) == 0);
-      if (err) { errcode = GetLastError(); }
-    }
-  }
-  if (errcode != 0) {
-    _mi_warning_message("unable to release OS memory: error code 0x%x, addr: %p, size: %zu\n", errcode, addr, size);
-  }
-#elif defined(MI_USE_SBRK) || defined(__wasi__)
-  err = false; // sbrk heap cannot be shrunk
+    if (addr == NULL || size == 0)
+        return true; // || _mi_os_is_huge_reserved(addr)
+    bool err = false;
+
+#if defined(MI_USE_SBRK) || defined(__wasi__)
+    err = false; // sbrk heap cannot be shrunk
 #else
-  err = (munmap(addr, size) == -1);
-  if (err) {
-    _mi_warning_message("unable to release OS memory: %s, addr: %p, size: %zu\n", strerror(errno), addr, size);
-  }
+    // TODO: check 'where to return the memory'
+    /*void*/k_heap_free(NULL, addr); // !!! NOTE  addr and size were here as arg for free function
+    if (err)
+    {
+        _mi_warning_message(
+                "unable to release OS memory: %s, addr: %p, size: %zu\n",
+                strerror(errno),
+                addr,
+                size);
+    }
 #endif
-  if (was_committed) { _mi_stat_decrease(&stats->committed, size); }
-  _mi_stat_decrease(&stats->reserved, size);
-  return !err;
+    if (was_committed)
+    {
+        _mi_stat_decrease(&stats->committed, size);
+    }
+    _mi_stat_decrease(&stats->reserved, size);
+    return !err;
 }
 
 
@@ -544,43 +561,75 @@ static void* mi_heap_grow(size_t size, size_t try_alignment) {
   Raw allocation on Unix's (mmap)
 -------------------------------------------------------------- */
 #else
+#ifndef _ZARM64
 #define MI_OS_USE_MMAP
+#endif
+#ifdef MI_OS_USE_MMAP
 static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int protect_flags, int flags, int fd) {
-  MI_UNUSED(try_alignment);
-  #if defined(MAP_ALIGNED)  // BSD
-  if (addr == NULL && try_alignment > 1 && (try_alignment % _mi_os_page_size()) == 0) {
-    size_t n = mi_bsr(try_alignment);
-    if (((size_t)1 << n) == try_alignment && n >= 12 && n <= 30) {  // alignment is a power of 2 and 4096 <= alignment <= 1GiB
-      flags |= MAP_ALIGNED(n);
-      void* p = mmap(addr, size, protect_flags, flags | MAP_ALIGNED(n), fd, 0);
-      if (p!=MAP_FAILED) return p;
-      // fall back to regular mmap
+
+    MI_UNUSED(try_alignment);
+    #if defined(MAP_ALIGNED) // BSD
+    if (addr == NULL && try_alignment > 1
+        && (try_alignment % _mi_os_page_size()) == 0)
+    {
+        size_t n = mi_bsr(try_alignment);
+        if (((size_t)1 << n) == try_alignment && n >= 12 && n <= 30)
+        { // alignment is a power of 2 and 4096 <= alignment <= 1GiB
+            flags |= MAP_ALIGNED(n);
+            void *p
+                    = mmap(addr,
+                           size,
+                           protect_flags,
+                           flags | MAP_ALIGNED(n),
+                           fd,
+                           0);
+            if (p != MAP_FAILED)
+                return p;
+            // fall back to regular mmap
+        }
     }
-  }
-  #elif defined(MAP_ALIGN)  // Solaris
-  if (addr == NULL && try_alignment > 1 && (try_alignment % _mi_os_page_size()) == 0) {
-    void* p = mmap((void*)try_alignment, size, protect_flags, flags | MAP_ALIGN, fd, 0);  // addr parameter is the required alignment
-    if (p!=MAP_FAILED) return p;
-    // fall back to regular mmap
-  }
-  #endif
-  #if (MI_INTPTR_SIZE >= 8) && !defined(MAP_ALIGNED)
-  // on 64-bit systems, use the virtual address area after 2TiB for 4MiB aligned allocations
-  if (addr == NULL) {
-    void* hint = mi_os_get_aligned_hint(try_alignment, size);
-    if (hint != NULL) {
-      void* p = mmap(hint, size, protect_flags, flags, fd, 0);
-      if (p!=MAP_FAILED) return p;
-      // fall back to regular mmap
+    #elif defined(MAP_ALIGN) // Solaris
+    if (addr == NULL && try_alignment > 1
+        && (try_alignment % _mi_os_page_size()) == 0)
+    {
+        void *p
+                = mmap((void *)try_alignment,
+                       size,
+                       protect_flags,
+                       flags | MAP_ALIGN,
+                       fd,
+                       0); // addr parameter is the required alignment
+        if (p != MAP_FAILED)
+            return p;
+        // fall back to regular mmap
     }
-  }
-  #endif
-  // regular mmap
-  void* p = mmap(addr, size, protect_flags, flags, fd, 0);
-  if (p!=MAP_FAILED) return p;
-  // failed to allocate
-  return NULL;
+    #endif
+    #if (MI_INTPTR_SIZE >= 8) && !defined(MAP_ALIGNED)
+    // on 64-bit systems, use the virtual address area after 2TiB for 4MiB
+    // aligned allocations
+    if (addr == NULL)
+    {
+        void *hint = mi_os_get_aligned_hint(try_alignment, size);
+        if (hint != NULL)
+        {
+            void *p = mmap(hint, size, protect_flags, flags, fd, 0);
+            if (p != MAP_FAILED)
+                return p;
+            // fall back to regular mmap
+        }
+    }
+    #endif
+    // regular mmap
+    void *p = mmap(addr, size, protect_flags, flags, fd, 0);
+    if (p != MAP_FAILED)
+        return p;
+    // failed to allocate
+
+    return NULL;
 }
+#endif // MI_OS_USE_MMAP
+
+#ifndef _ZARM64
 
 static int mi_unix_mmap_fd(void) {
 #if defined(VM_MAKE_TAG)
@@ -592,111 +641,178 @@ static int mi_unix_mmap_fd(void) {
   return -1;
 #endif
 }
-
-static void* mi_unix_mmap(void* addr, size_t size, size_t try_alignment, int protect_flags, bool large_only, bool allow_large, bool* is_large) {
-  void* p = NULL;
-  #if !defined(MAP_ANONYMOUS)
-  #define MAP_ANONYMOUS  MAP_ANON
-  #endif
-  #if !defined(MAP_NORESERVE)
-  #define MAP_NORESERVE  0
-  #endif
-  const int fd = mi_unix_mmap_fd();
-  int flags = MAP_PRIVATE | MAP_ANONYMOUS;
-  if (_mi_os_has_overcommit()) {
-    flags |= MAP_NORESERVE;
-  }
-  #if defined(PROT_MAX)
-  protect_flags |= PROT_MAX(PROT_READ | PROT_WRITE); // BSD
-  #endif    
-  // huge page allocation
-  if ((large_only || use_large_os_page(size, try_alignment)) && allow_large) {
-    static _Atomic(size_t) large_page_try_ok; // = 0;
-    size_t try_ok = mi_atomic_load_acquire(&large_page_try_ok);
-    if (!large_only && try_ok > 0) {
-      // If the OS is not configured for large OS pages, or the user does not have
-      // enough permission, the `mmap` will always fail (but it might also fail for other reasons).
-      // Therefore, once a large page allocation failed, we don't try again for `large_page_try_ok` times
-      // to avoid too many failing calls to mmap.
-      mi_atomic_cas_strong_acq_rel(&large_page_try_ok, &try_ok, try_ok - 1);
+static void *mi_unix_mmap(
+        void *addr,
+        size_t size,
+        size_t try_alignment,
+        int protect_flags,
+        bool large_only,
+        bool allow_large,
+        bool *is_large)
+{
+    void *p = NULL;
+    #if !defined(MAP_ANONYMOUS)
+        #define MAP_ANONYMOUS MAP_ANON
+    #endif
+    #if !defined(MAP_NORESERVE)
+        #define MAP_NORESERVE 0
+    #endif
+    const int fd = mi_unix_mmap_fd();
+    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+    if (_mi_os_has_overcommit())
+    {
+        flags |= MAP_NORESERVE;
     }
-    else {
-      int lflags = flags & ~MAP_NORESERVE;  // using NORESERVE on huge pages seems to fail on Linux
-      int lfd = fd;
-      #ifdef MAP_ALIGNED_SUPER
-      lflags |= MAP_ALIGNED_SUPER;
-      #endif
-      #ifdef MAP_HUGETLB
-      lflags |= MAP_HUGETLB;
-      #endif
-      #ifdef MAP_HUGE_1GB
-      static bool mi_huge_pages_available = true;
-      if ((size % MI_GiB) == 0 && mi_huge_pages_available) {
-        lflags |= MAP_HUGE_1GB;
-      }
-      else
-      #endif
-      {
-        #ifdef MAP_HUGE_2MB
-        lflags |= MAP_HUGE_2MB;
-        #endif
-      }
-      #ifdef VM_FLAGS_SUPERPAGE_SIZE_2MB
-      lfd |= VM_FLAGS_SUPERPAGE_SIZE_2MB;
-      #endif
-      if (large_only || lflags != flags) {
-        // try large OS page allocation
-        *is_large = true;
-        p = mi_unix_mmapx(addr, size, try_alignment, protect_flags, lflags, lfd);
-        #ifdef MAP_HUGE_1GB
-        if (p == NULL && (lflags & MAP_HUGE_1GB) != 0) {
-          mi_huge_pages_available = false; // don't try huge 1GiB pages again
-          _mi_warning_message("unable to allocate huge (1GiB) page, trying large (2MiB) pages instead (error %i)\n", errno);
-          lflags = ((lflags & ~MAP_HUGE_1GB) | MAP_HUGE_2MB);
-          p = mi_unix_mmapx(addr, size, try_alignment, protect_flags, lflags, lfd);
+    #if defined(PROT_MAX)
+    protect_flags |= PROT_MAX(PROT_READ | PROT_WRITE); // BSD
+    #endif
+    // huge page allocation
+    if ((large_only || use_large_os_page(size, try_alignment)) && allow_large)
+    {
+        static _Atomic(size_t) large_page_try_ok; // = 0;
+        size_t try_ok = mi_atomic_load_acquire(&large_page_try_ok);
+        if (!large_only && try_ok > 0)
+        {
+            // If the OS is not configured for large OS pages, or the user does
+            // not have enough permission, the `mmap` will always fail (but it
+            // might also fail for other reasons). Therefore, once a large page
+            // allocation failed, we don't try again for `large_page_try_ok`
+            // times to avoid too many failing calls to mmap.
+            mi_atomic_cas_strong_acq_rel(
+                    &large_page_try_ok,
+                    &try_ok,
+                    try_ok - 1);
         }
-        #endif
-        if (large_only) return p;
-        if (p == NULL) {
-          mi_atomic_store_release(&large_page_try_ok, (size_t)8);  // on error, don't try again for the next N allocations
+        else
+        {
+            int lflags = flags & ~MAP_NORESERVE; // using NORESERVE on huge
+                                                 // pages seems to fail on Linux
+            int lfd = fd;
+    #ifdef MAP_ALIGNED_SUPER
+            lflags |= MAP_ALIGNED_SUPER;
+    #endif
+    #ifdef MAP_HUGETLB
+            lflags |= MAP_HUGETLB;
+    #endif
+    #ifdef MAP_HUGE_1GB
+            static bool mi_huge_pages_available = true;
+            if ((size % MI_GiB) == 0 && mi_huge_pages_available)
+            {
+                lflags |= MAP_HUGE_1GB;
+            }
+            else
+    #endif
+            {
+    #ifdef MAP_HUGE_2MB
+                lflags |= MAP_HUGE_2MB;
+    #endif
+            }
+    #ifdef VM_FLAGS_SUPERPAGE_SIZE_2MB
+            lfd |= VM_FLAGS_SUPERPAGE_SIZE_2MB;
+    #endif
+            if (large_only || lflags != flags)
+            {
+                // try large OS page allocation
+                *is_large = true;
+                p = mi_unix_mmapx(
+                        addr,
+                        size,
+                        try_alignment,
+                        protect_flags,
+                        lflags,
+                        lfd);
+    #ifdef MAP_HUGE_1GB
+                if (p == NULL && (lflags & MAP_HUGE_1GB) != 0)
+                {
+                    mi_huge_pages_available
+                            = false; // don't try huge 1GiB pages again
+                    _mi_warning_message(
+                            "unable to allocate huge (1GiB) page, trying large "
+                            "(2MiB) pages instead (error %i)\n",
+                            errno);
+                    lflags = ((lflags & ~MAP_HUGE_1GB) | MAP_HUGE_2MB);
+                    p = mi_unix_mmapx(
+                            addr,
+                            size,
+                            try_alignment,
+                            protect_flags,
+                            lflags,
+                            lfd);
+                }
+    #endif
+                if (large_only)
+                    return p;
+                if (p == NULL)
+                {
+                    mi_atomic_store_release(
+                            &large_page_try_ok,
+                            (size_t)8); // on error, don't try again for the
+                                        // next N allocations
+                }
+            }
         }
-      }
     }
-  }
-  // regular allocation
-  if (p == NULL) {
-    *is_large = false;
-    p = mi_unix_mmapx(addr, size, try_alignment, protect_flags, flags, fd);
-    if (p != NULL) {
-      #if defined(MADV_HUGEPAGE)
-      // Many Linux systems don't allow MAP_HUGETLB but they support instead
-      // transparent huge pages (THP). Generally, it is not required to call `madvise` with MADV_HUGE
-      // though since properly aligned allocations will already use large pages if available
-      // in that case -- in particular for our large regions (in `memory.c`).
-      // However, some systems only allow THP if called with explicit `madvise`, so
-      // when large OS pages are enabled for mimalloc, we call `madvise` anyways.
-      if (allow_large && use_large_os_page(size, try_alignment)) {
-        if (mi_madvise(p, size, MADV_HUGEPAGE) == 0) {
-          *is_large = true; // possibly
-        };
-      }
-      #elif defined(__sun)
-      if (allow_large && use_large_os_page(size, try_alignment)) {
-        struct memcntl_mha cmd = {0};
-        cmd.mha_pagesize = large_os_page_size;
-        cmd.mha_cmd = MHA_MAPSIZE_VA;
-        if (memcntl((caddr_t)p, size, MC_HAT_ADVISE, (caddr_t)&cmd, 0, 0) == 0) {
-          *is_large = true;
+    // regular allocation
+    if (p == NULL)
+    {
+        *is_large = false;
+        p = mi_unix_mmapx(addr, size, try_alignment, protect_flags, flags, fd);
+        if (p != NULL)
+        {
+    #if defined(MADV_HUGEPAGE)
+            // Many Linux systems don't allow MAP_HUGETLB but they support
+            // instead transparent huge pages (THP). Generally, it is not
+            // required to call `madvise` with MADV_HUGE though since properly
+            // aligned allocations will already use large pages if available in
+            // that case -- in particular for our large regions (in `memory.c`).
+            // However, some systems only allow THP if called with explicit
+            // `madvise`, so when large OS pages are enabled for mimalloc, we
+            // call `madvise` anyways.
+            if (allow_large && use_large_os_page(size, try_alignment))
+            {
+              #ifndef _ZARM64
+                if (mi_madvise(p, size, MADV_HUGEPAGE) == 0)
+                {
+                    *is_large = true; // possibly
+                };
+              #else
+                  *is_large = true; // TODO: know if it's huge or not
+              #endif // _ZARM64
+            }
+    #elif defined(__sun)
+            if (allow_large && use_large_os_page(size, try_alignment))
+            {
+                struct memcntl_mha cmd = { 0 };
+                cmd.mha_pagesize = large_os_page_size;
+                cmd.mha_cmd = MHA_MAPSIZE_VA;
+                if (memcntl((caddr_t)p,
+                            size,
+                            MC_HAT_ADVISE,
+                            (caddr_t)&cmd,
+                            0,
+                            0)
+                    == 0)
+                {
+                    *is_large = true;
+                }
+            }
+    #endif
         }
-      }
-      #endif
     }
-  }
-  if (p == NULL) {
-    _mi_warning_message("unable to allocate OS memory (%zu bytes, error code: %i, address: %p, large only: %d, allow large: %d)\n", size, errno, addr, large_only, allow_large);
-  }
-  return p;
+    if (p == NULL)
+    {
+        _mi_warning_message(
+                "unable to allocate OS memory (%zu bytes, error code: %i, "
+                "address: %p, large only: %d, allow large: %d)\n",
+                size,
+                errno,
+                addr,
+                large_only,
+                allow_large);
+    }
+    return p;
 }
+#endif
 #endif
 
 
@@ -707,6 +823,7 @@ static void* mi_unix_mmap(void* addr, size_t size, size_t try_alignment, int pro
 // Note: the `try_alignment` is just a hint and the returned pointer is not guaranteed to be aligned.
 static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, bool allow_large, bool* is_large, mi_stats_t* stats) {
   mi_assert_internal(size > 0 && (size % _mi_os_page_size()) == 0);
+  (void) allow_large;
   if (size == 0) return NULL;
   if (!commit) allow_large = false;
   if (try_alignment == 0) try_alignment = 1; // avoid 0 to ensure there will be no divide by zero when aligning
@@ -731,8 +848,10 @@ static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, boo
     *is_large = false;
     p = mi_heap_grow(size, try_alignment);
   #else
+    #ifndef _ZARM64
     int protect_flags = (commit ? (PROT_WRITE | PROT_READ) : PROT_NONE);
     p = mi_unix_mmap(NULL, size, try_alignment, protect_flags, false, allow_large, is_large);
+    #endif
   #endif
   mi_stat_counter_increase(stats->mmap_calls, 1);
   if (p != NULL) {
@@ -966,6 +1085,7 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
   }
   #else
   // Linux, macOSX and others.
+  #ifndef _ZARM64
   if (commit) {
     // commit: ensure we can access the area
     err = mprotect(start, csize, (PROT_READ | PROT_WRITE));
@@ -975,7 +1095,9 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
     #if defined(MADV_DONTNEED) && MI_DEBUG == 0 && MI_SECURE == 0
     // decommit: use MADV_DONTNEED as it decreases rss immediately (unlike MADV_FREE)
     // (on the other hand, MADV_FREE would be good enough.. it is just not reflected in the stats :-( )
+#ifndef _ZARM64
     err = madvise(start, csize, MADV_DONTNEED);
+#endif // _ZARM64
     #else
     // decommit: just disable access (also used in debug and secure mode to trap on illegal access)
     err = mprotect(start, csize, PROT_NONE);
@@ -990,6 +1112,7 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
     _mi_warning_message("%s error: start: %p, csize: 0x%zx, err: %i\n", commit ? "commit" : "decommit", start, csize, err);
     mi_mprotect_hint(err);
   }
+  #endif // _ZARM64
   mi_assert_internal(err == 0);
   return (err == 0);
 }
@@ -1048,17 +1171,23 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
   static _Atomic(size_t) advice = MI_ATOMIC_VAR_INIT(MADV_FREE);
   int oadvice = (int)mi_atomic_load_relaxed(&advice);
   int err;
+  #ifndef _ZARM64
   while ((err = mi_madvise(start, csize, oadvice)) != 0 && errno == EAGAIN) { errno = 0;  };
   if (err != 0 && errno == EINVAL && oadvice == MADV_FREE) {
     // if MADV_FREE is not supported, fall back to MADV_DONTNEED from now on
-    mi_atomic_store_release(&advice, (size_t)MADV_DONTNEED);
     err = mi_madvise(start, csize, MADV_DONTNEED);
   }
+  #else
+    mi_atomic_store_release(&advice, (size_t)MADV_DONTNEED); //TODO: check if correct
+  #endif // _ZARM64
 #elif defined(__wasi__)
   int err = 0;
 #else
+  #ifndef _ZARM64
   int err = mi_madvise(start, csize, MADV_DONTNEED);
+  #endif // _ZARM64
 #endif
+  int err = 0;
   if (err != 0) {
     _mi_warning_message("madvise reset error: start: %p, csize: 0x%zx, errno: %i\n", start, csize, errno);
   }
@@ -1106,6 +1235,7 @@ static  bool mi_os_protectx(void* addr, size_t size, bool protect) {
 #elif defined(__wasi__)
   err = 0;
 #else
+#ifndef _ZARM64
   err = mprotect(start, csize, protect ? PROT_NONE : (PROT_READ | PROT_WRITE));
   if (err != 0) { err = errno; }
 #endif
@@ -1113,6 +1243,7 @@ static  bool mi_os_protectx(void* addr, size_t size, bool protect) {
     _mi_warning_message("mprotect error: start: %p, csize: 0x%zx, err: %i\n", start, csize, err);
     mi_mprotect_hint(err);
   }
+#endif // _ZARM64
   return (err == 0);
 }
 
@@ -1198,7 +1329,12 @@ static void* mi_os_alloc_huge_os_pagesx(void* addr, size_t size, int numa_node)
 }
 
 #elif defined(MI_OS_USE_MMAP) && (MI_INTPTR_SIZE >= 8) && !defined(__HAIKU__)
-#include <sys/syscall.h>
+#ifdef _ZARM64
+#include <zephyr/arch/arm64/syscall.h>
+#else
+    #include <sys/syscall.h>
+#endif
+
 #ifndef MPOL_PREFERRED
 #define MPOL_PREFERRED 1
 #endif
@@ -1215,8 +1351,20 @@ static long mi_os_mbind(void* start, unsigned long len, unsigned long mode, cons
 static void* mi_os_alloc_huge_os_pagesx(void* addr, size_t size, int numa_node) {
   mi_assert_internal(size%MI_GiB == 0);
   bool is_large = true;
-  void* p = mi_unix_mmap(addr, size, MI_SEGMENT_SIZE, PROT_READ | PROT_WRITE, true, true, &is_large);
-  if (p == NULL) return NULL;
+    #ifndef _ZARM64
+    void *p = mi_unix_mmap(
+            addr,
+            size,
+            MI_SEGMENT_SIZE,
+            PROT_READ | PROT_WRITE,
+            true,
+            true,
+            &is_large);
+    if (p == NULL)
+        return NULL;
+    #else
+        void *p = NULL; // TODO: implement memory
+    #endif
   if (numa_node >= 0 && numa_node < 8*MI_INTPTR_SIZE) { // at most 64 nodes
     unsigned long numa_mask = (1UL << numa_node);
     // TODO: does `mbind` work correctly for huge OS pages? should we

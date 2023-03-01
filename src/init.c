@@ -10,6 +10,11 @@ terms of the MIT license. A copy of the license can be found in the file
 #include <string.h>  // memcpy, memset
 #include <stdlib.h>  // atexit
 
+#ifdef _ZARM64
+/* Keys for thread-specific data */
+typedef unsigned int pthread_key_t;
+#endif
+
 // Empty page used to initialize the small free pages array
 const mi_page_t _mi_page_empty = {
   0, false, false, false, false,
@@ -542,7 +547,11 @@ static void mi_process_load(void) {
   os_preloading = false;
   mi_assert_internal(_mi_is_main_thread());
   #if !(defined(_WIN32) && defined(MI_SHARED_LIB))  // use Dll process detach (see below) instead of atexit (issue #521)
+#ifndef _ZARM64
   atexit(&mi_process_done);
+#else
+  mi_process_done();
+#endif // _ZARM64
   #endif
   _mi_options_init();
   mi_process_setup_auto_thread_done();
