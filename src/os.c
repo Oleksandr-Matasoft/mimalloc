@@ -310,17 +310,17 @@ void _mi_os_init(void) {
 
 #ifndef _ZARM64
 #if defined(MADV_NORMAL)
-// static int mi_madvise(void *addr, size_t length, int advice)
-// {
-//     #if defined(__sun)
-//     return madvise(
-//             (caddr_t)addr,
-//             length,
-//             advice); // Solaris needs cast (issue #520)
-//     #else
-//     return madvise(addr, length, advice);
-//     #endif
-// }
+static int mi_madvise(void *addr, size_t length, int advice)
+{
+    #if defined(__sun)
+    return madvise(
+            (caddr_t)addr,
+            length,
+            advice); // Solaris needs cast (issue #520)
+    #else
+    return madvise(addr, length, advice);
+    #endif
+}
 #endif
 #endif
 
@@ -1171,23 +1171,31 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
   static _Atomic(size_t) advice = MI_ATOMIC_VAR_INIT(MADV_FREE);
   int oadvice = (int)mi_atomic_load_relaxed(&advice);
   int err;
-  #ifndef _ZARM64
+
+#ifndef _ZARM64
   while ((err = mi_madvise(start, csize, oadvice)) != 0 && errno == EAGAIN) { errno = 0;  };
+#else
+  err = 0; // TODO: check how to advice Zephyr
+#endif // _ZARM64
+
   if (err != 0 && errno == EINVAL && oadvice == MADV_FREE) {
     // if MADV_FREE is not supported, fall back to MADV_DONTNEED from now on
+    mi_atomic_store_release(&advice, (size_t)MADV_DONTNEED);
+
+#ifndef _ZARM64
     err = mi_madvise(start, csize, MADV_DONTNEED);
+#endif // _ZARM64
+
   }
-  #else
-    mi_atomic_store_release(&advice, (size_t)MADV_DONTNEED); //TODO: check if correct
-  #endif // _ZARM64
 #elif defined(__wasi__)
   int err = 0;
 #else
-  #ifndef _ZARM64
-  int err = mi_madvise(start, csize, MADV_DONTNEED);
-  #endif // _ZARM64
-#endif
   int err = 0;
+#ifndef _ZARM64
+  err = mi_madvise(start, csize, MADV_DONTNEED);
+#endif // _ZARM64
+
+#endif
   if (err != 0) {
     _mi_warning_message("madvise reset error: start: %p, csize: 0x%zx, errno: %i\n", start, csize, errno);
   }
