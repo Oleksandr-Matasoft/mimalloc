@@ -9,6 +9,7 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include <string.h>  // memcpy, memset
 #include <stdlib.h>  // atexit
+#include <zephyr/kernel.h>
 
 #ifdef _ZARM64
 /* Keys for thread-specific data */
@@ -170,17 +171,26 @@ mi_stats_t _mi_stats_main = { MI_STATS_NULL };
 
 
 static void mi_heap_main_init(void) {
+  printk("### mi_heap_main_init [0]");
   if (_mi_heap_main.cookie == 0) {
+    printk("### mi_heap_main_init [1]");
     _mi_heap_main.thread_id = _mi_thread_id();
+    printk("### mi_heap_main_init [2]");
     _mi_heap_main.cookie = 1;
+    printk("### mi_heap_main_init [3]");
     #if defined(_WIN32) && !defined(MI_SHARED_LIB)
       _mi_random_init_weak(&_mi_heap_main.random);    // prevent allocation failure during bcrypt dll initialization with static linking
+   printk("### mi_heap_main_init [4]");
     #else
       _mi_random_init(&_mi_heap_main.random);
+      printk("### mi_heap_main_init [5]");
     #endif
     _mi_heap_main.cookie  = _mi_heap_random_next(&_mi_heap_main);
+    printk("### mi_heap_main_init [6]");
     _mi_heap_main.keys[0] = _mi_heap_random_next(&_mi_heap_main);
+    printk("### mi_heap_main_init [7]");
     _mi_heap_main.keys[1] = _mi_heap_random_next(&_mi_heap_main);
+    printk("### mi_heap_main_init [8]");
   }
 }
 
@@ -538,7 +548,7 @@ static void mi_allocator_done(void) {
 #endif
 
 // Called once by the process loader
-static void mi_process_load(void) {
+void mi_process_load(void) {
   mi_heap_main_init();
   #if defined(MI_TLS_RECURSE_GUARD)
   volatile mi_heap_t* dummy = _mi_heap_default; // access TLS to allocate it before setting tls_initialized to true;
@@ -717,8 +727,13 @@ static void mi_cdecl mi_process_done(void) {
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
   static void __attribute__((constructor)) _mi_process_init(void) {
+    printk("$$$$$$$ --- CONSTRUCTOR --- $$$$$$$$$$$$$$$$\n");
     mi_process_load();
   }
+  // static void _mi_process_init(void) {
+  //   printk("$$$$$$$ --- CONSTRUCTOR --- $$$$$$$$$$$$$$$$\n");
+  //   //mi_process_load();
+  // }
 
 #else
 #pragma message("define a way to call mi_process_load on your platform")

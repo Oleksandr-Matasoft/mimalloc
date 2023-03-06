@@ -412,7 +412,7 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 -------------------------------------------------------------- */
 
 #ifdef _WIN32
- 
+
 #define MEM_COMMIT_RESERVE  (MEM_COMMIT|MEM_RESERVE)
 
 static void* mi_win_virtual_allocx(void* addr, size_t size, size_t try_alignment, DWORD flags) {
