@@ -233,11 +233,14 @@ static void mi_stat_counter_print_avg(const mi_stat_counter_t* stat, const char*
 
 
 static void mi_print_header(mi_output_fun* out, void* arg ) {
+   printk("$$$ mi_print_header [0]\n");
   _mi_fprintf(out, arg, "%10s: %10s %10s %10s %10s %10s %10s\n", "heap stats", "peak   ", "total   ", "freed   ", "current   ", "unit   ", "count   ");
+  printk("$$$ mi_print_header [1]\n");
 }
 
 #if MI_STAT>1
 static void mi_stats_print_bins(const mi_stat_count_t* bins, size_t max, const char* fmt, mi_output_fun* out, void* arg) {
+  printk("$$$ mi_print_header [0]\n");
   bool found = false;
   char buf[64];
   for (size_t i = 0; i <= max; i++) {
@@ -245,12 +248,17 @@ static void mi_stats_print_bins(const mi_stat_count_t* bins, size_t max, const c
       found = true;
       int64_t unit = _mi_bin_size((uint8_t)i);
       snprintf(buf, 64, "%s %3lu", fmt, (long)i);
+      printk("$$$ mi_print_header [2]\n");
       mi_stat_print(&bins[i], buf, unit, out, arg);
     }
   }
+  printk("$$$ mi_print_header [3]\n");
   if (found) {
+    printk("$$$ mi_print_header [4]\n");
     _mi_fprintf(out, arg, "\n");
+    printk("$$$ mi_print_header [5]\n");
     mi_print_header(out, arg);
+    printk("$$$ mi_print_header [6]\n");
   }
 }
 #endif
@@ -295,12 +303,15 @@ static void mi_stat_process_info(mi_msecs_t* elapsed, mi_msecs_t* utime, mi_msec
 
 static void _mi_stats_print(mi_stats_t* stats, mi_output_fun* out0, void* arg0) mi_attr_noexcept {
   // wrap the output function to be line buffered
+  printk("$$$ _mi_stats_print [0]\n");
   char buf[256];
   buffered_t buffer = { out0, arg0, NULL, 0, 255 };
   buffer.buf = buf;
   mi_output_fun* out = &mi_buffered_out;
+  printk("$$$ out: %p\n", out);
   void* arg = &buffer;
 
+  printk("$$$ _mi_stats_print [1]\n");
   // and print using that
   mi_print_header(out,arg);
   #if MI_STAT>1

@@ -103,29 +103,29 @@ static mi_option_desc_t options[_mi_option_last] =
 static void mi_option_init(mi_option_desc_t* desc);
 
 void _mi_options_init(void) {
-  printk("### _mi_options_init[0]");
+  // // printk("### _mi_options_init[0]");
   // called on process load; should not be called before the CRT is initialized!
   // (e.g. do not call this from process_init as that may run before CRT initialization)
   mi_add_stderr_output(); // now it safe to use stderr for output
-  printk("### _mi_options_init[1]");
+  // // printk("### _mi_options_init[1]");
   for(int i = 0; i < _mi_option_last; i++ ) {
-    printk("### _mi_options_init[2]");
+    // // printk("### _mi_options_init[2]");
     mi_option_t option = (mi_option_t)i;
-    printk("### _mi_options_init[3]");
+    // // printk("### _mi_options_init[3]");
     long l = mi_option_get(option); MI_UNUSED(l); // initialize
-    printk("### _mi_options_init[4]");
+    // // printk("### _mi_options_init[4]");
     // if (option != mi_option_verbose)
     {
       mi_option_desc_t* desc = &options[option];
-      printk("### _mi_options_init[5]");
+      // // printk("### _mi_options_init[5]");
       _mi_verbose_message("option '%s': %ld\n", desc->name, desc->value);
-      printk("### _mi_options_init[6]");
+      // // printk("### _mi_options_init[6]");
     }
   }
   mi_max_error_count = mi_option_get(mi_option_max_errors);
-  printk("### _mi_options_init[7]");
+  // // printk("### _mi_options_init[7]");
   mi_max_warning_count = mi_option_get(mi_option_max_warnings);
-  printk("### _mi_options_init[8]");
+  // // printk("### _mi_options_init[8]");
 }
 
 mi_decl_nodiscard long mi_option_get(mi_option_t option) {
@@ -300,17 +300,17 @@ void mi_register_output(mi_output_fun* out, void* arg) mi_attr_noexcept {
 
 // add stderr to the delayed output after the module is loaded
 static void mi_add_stderr_output() {
-  printk("### mi_add_stderr_output[0]");
-  mi_assert_internal(mi_out_default == NULL);
-  printk("### mi_add_stderr_output[1]");
+  // printk("### mi_add_stderr_output[0]");
+ // mi_assert_internal(mi_out_default == NULL);  //TODO: revisit, why was
+  // printk("### mi_add_stderr_output[1]");
   #ifndef _ZARM64
   mi_out_buf_flush(&mi_out_stderr, false, NULL); // flush current contents to stderr
-  printk("### mi_add_stderr_output[2]");
+  // printk("### mi_add_stderr_output[2]");
   mi_out_default = &mi_out_buf_stderr;           // and add stderr to the delayed output
   #else
   printk("Zephyr aarch64: TODO: <not flushing>");
   #endif
-  printk("### mi_add_stderr_output[3]");
+  // printk("### mi_add_stderr_output[3]");
 }
 
 // --------------------------------------------------------
@@ -355,15 +355,24 @@ static void mi_recurse_exit(void) {
 }
 
 void _mi_fputs(mi_output_fun* out, void* arg, const char* prefix, const char* message) {
+  // printk("### %s[0]\n", __FUNCTION__ );
+  // printk("### %s[1]\n", __FUNCTION__ );
   if (out==NULL || (FILE*)out==stdout || (FILE*)out==stderr) { // TODO: use mi_out_stderr for stderr?
+  // printk("### %s[2]\n", __FUNCTION__ );
     if (!mi_recurse_enter()) return;
+    // printk("### %s[3]\n", __FUNCTION__ );
     out = mi_out_get_default(&arg);
+    // printk("### %s[4]\n", __FUNCTION__ );
     if (prefix != NULL) out(prefix, arg);
+    // printk("### %s[5]\n", __FUNCTION__ );
     out(message, arg);
+    // printk("### %s[6]\n", __FUNCTION__ );
     mi_recurse_exit();
   }
   else {
+    // printk("### %s[7]\n", __FUNCTION__ );
     if (prefix != NULL) out(prefix, arg);
+    // printk("### %s[8]\n", __FUNCTION__ );
     out(message, arg);
   }
 }
@@ -372,44 +381,61 @@ void _mi_fputs(mi_output_fun* out, void* arg, const char* prefix, const char* me
 // We do this using `snprintf` with a limited buffer.
 static void mi_vfprintf( mi_output_fun* out, void* arg, const char* prefix, const char* fmt, va_list args ) {
   char buf[512];
+   // printk("### %s[0]\n", __FUNCTION__ );
   if (fmt==NULL) return;
+   // printk("### %s[1]\n", __FUNCTION__ );
   if (!mi_recurse_enter()) return;
+   // printk("### %s[2]\n", __FUNCTION__ );
   vsnprintf(buf,sizeof(buf)-1,fmt,args);
   mi_recurse_exit();
+   // printk("### %s[3]\n", __FUNCTION__ );
   _mi_fputs(out,arg,prefix,buf);
+   // printk("### %s[4]\n", __FUNCTION__ );
 }
 
 void _mi_fprintf( mi_output_fun* out, void* arg, const char* fmt, ... ) {
+  // printk("### %s[0]\n", __FUNCTION__ );
   va_list args;
   va_start(args,fmt);
+   // printk("### %s[1]\n", __FUNCTION__ );
   mi_vfprintf(out,arg,NULL,fmt,args);
+   // printk("### %s[2]\n", __FUNCTION__ );
   va_end(args);
 }
 
 static void mi_vfprintf_thread(mi_output_fun* out, void* arg, const char* prefix, const char* fmt, va_list args) {
+  // printk("### %s[1]\n", __FUNCTION__ );
   if (prefix != NULL && strlen(prefix) <= 32 && !_mi_is_main_thread()) {
     char tprefix[64];
+    // printk("### %s[2]\n", __FUNCTION__ );
     snprintf(tprefix, sizeof(tprefix), "%sthread 0x%llx: ", prefix, (unsigned long long)_mi_thread_id());
+    // printk("### %s[3]\n", __FUNCTION__ );
     mi_vfprintf(out, arg, tprefix, fmt, args);
+    // printk("### %s[4]\n", __FUNCTION__ );
   }
   else {
+    // printk("### %s[5]\n", __FUNCTION__ );
     mi_vfprintf(out, arg, prefix, fmt, args);
+    // printk("### %s[6]\n", __FUNCTION__ );
   }
 }
 
 void _mi_trace_message(const char* fmt, ...) {
+  // printk("### %s[0]\n", __FUNCTION__ );
   if (mi_option_get(mi_option_verbose) <= 1) return;  // only with verbose level 2 or higher
+  // printk("### %s[1]\n", __FUNCTION__ );
   va_list args;
   va_start(args, fmt);
   mi_vfprintf_thread(NULL, NULL, "mimalloc: ", fmt, args);
+  // printk("### %s[2]\n", __FUNCTION__ );
   va_end(args);
 }
 
 void _mi_verbose_message(const char* fmt, ...) {
-  if (!mi_option_is_enabled(mi_option_verbose)) return;
+  //if (!mi_option_is_enabled(mi_option_verbose)) return; // TODO: redo
   va_list args;
   va_start(args,fmt);
-  mi_vfprintf(NULL, NULL, "mimalloc: ", fmt, args);
+  mi_vfprintf(mi_out_default, NULL, "mimalloc: ", fmt, args);
   va_end(args);
 }
 
@@ -418,7 +444,7 @@ static void mi_show_error_message(const char* fmt, va_list args) {
     if (!mi_option_is_enabled(mi_option_show_errors)) return;
     if (mi_max_error_count >= 0 && (long)mi_atomic_increment_acq_rel(&error_count) > mi_max_error_count) return;
   }
-  mi_vfprintf_thread(NULL, NULL, "mimalloc: error: ", fmt, args);
+  mi_vfprintf_thread(mi_out_default, NULL, "mimalloc: error: ", fmt, args);
 }
 
 void _mi_warning_message(const char* fmt, ...) {
@@ -428,14 +454,14 @@ void _mi_warning_message(const char* fmt, ...) {
   }
   va_list args;
   va_start(args,fmt);
-  mi_vfprintf_thread(NULL, NULL, "mimalloc: warning: ", fmt, args);
+  mi_vfprintf_thread(mi_out_default, NULL, "mimalloc: warning: ", fmt, args); // _ZARM64 changed
   va_end(args);
 }
 
 
 #if MI_DEBUG
 void _mi_assert_fail(const char* assertion, const char* fname, unsigned line, const char* func ) {
-  _mi_fprintf(NULL, NULL, "mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
+  _mi_fprintf(mi_out_default, NULL, "mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
   abort();
 }
 #endif

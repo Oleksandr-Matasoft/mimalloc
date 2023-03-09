@@ -46,7 +46,7 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #else
 
-#define MI_TRACK_ENABLED 0
+#define MI_TRACK_ENABLED 1
 #define MI_TRACK_TOOL    "none"
 
 #define mi_track_malloc(p,size,zero)
