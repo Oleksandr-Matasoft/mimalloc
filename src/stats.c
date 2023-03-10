@@ -234,7 +234,11 @@ static void mi_stat_counter_print_avg(const mi_stat_counter_t* stat, const char*
 
 static void mi_print_header(mi_output_fun* out, void* arg ) {
    printk("$$$ mi_print_header [0]\n");
+#ifndef _ZARM64
   _mi_fprintf(out, arg, "%10s: %10s %10s %10s %10s %10s %10s\n", "heap stats", "peak   ", "total   ", "freed   ", "current   ", "unit   ", "count   ");
+#else
+  printk("%10s: %10s %10s %10s %10s %10s %10s\n", "heap stats", "peak   ", "total   ", "freed   ", "current   ", "unit   ", "count   ");
+#endif
   printk("$$$ mi_print_header [1]\n");
 }
 

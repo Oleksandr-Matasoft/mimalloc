@@ -381,6 +381,7 @@ void _mi_fputs(mi_output_fun* out, void* arg, const char* prefix, const char* me
 // We do this using `snprintf` with a limited buffer.
 static void mi_vfprintf( mi_output_fun* out, void* arg, const char* prefix, const char* fmt, va_list args ) {
   char buf[512];
+#ifndef _ZARM64
    // printk("### %s[0]\n", __FUNCTION__ );
   if (fmt==NULL) return;
    // printk("### %s[1]\n", __FUNCTION__ );
@@ -390,6 +391,10 @@ static void mi_vfprintf( mi_output_fun* out, void* arg, const char* prefix, cons
   mi_recurse_exit();
    // printk("### %s[3]\n", __FUNCTION__ );
   _mi_fputs(out,arg,prefix,buf);
+#else
+  vsnprintk(buf,sizeof(buf)-1,fmt,args);
+  out(buf, arg);
+#endif // _ZARM64
    // printk("### %s[4]\n", __FUNCTION__ );
 }
 
