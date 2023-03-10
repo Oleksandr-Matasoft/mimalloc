@@ -337,9 +337,9 @@ if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
   list(APPEND mi_cflags -Wall -Wextra -Wno-unknown-pragmas
     -fvisibility=hidden)
 
-  if(NOT MI_USE_CXX)
-    list(APPEND mi_cflags -Wstrict-prototypes)
-  endif()
+  # if(NOT MI_USE_CXX)
+  #   list(APPEND mi_cflags -Wstrict-prototypes)
+  # endif()
 
   if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang")
     list(APPEND mi_cflags -Wpedantic -Wno-static-in-inline)
@@ -495,11 +495,11 @@ message(STATUS "")
 if(MI_BUILD_STATIC)
   add_library(mimalloc-static STATIC ${mi_sources})
   set_property(TARGET mimalloc-static PROPERTY POSITION_INDEPENDENT_CODE ON)
-  target_compile_definitions(mimalloc-static PRIVATE ${mi_defines}
+  target_compile_definitions(mimalloc-static PUBLIC ${mi_defines}
     MI_STATIC_LIB)
   add_definitions(-DMADV_DONTNEED)
-  target_compile_options(mimalloc-static PRIVATE ${mi_cflags})
-  target_link_libraries(mimalloc-static PRIVATE ${mi_libraries})
+  target_compile_options(mimalloc-static PUBLIC ${mi_cflags})
+  target_link_libraries(mimalloc-static PUBLIC ${mi_libraries})
   target_include_directories(
     mimalloc-static
     PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -591,11 +591,11 @@ if(MI_OVERRIDE)
     # DLL.
     if(MI_BUILD_STATIC)
       target_compile_definitions(mimalloc-static
-        PRIVATE MI_MALLOC_OVERRIDE)
+        PUBLIC MI_MALLOC_OVERRIDE)
     endif()
 
     if(MI_BUILD_OBJECT)
-      target_compile_definitions(mimalloc-obj PRIVATE MI_MALLOC_OVERRIDE)
+      target_compile_definitions(mimalloc-obj PUBLIC MI_MALLOC_OVERRIDE)
     endif()
   endif()
 endif()

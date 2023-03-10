@@ -146,14 +146,17 @@ extern inline void* _mi_heap_malloc_zero_ex(mi_heap_t* heap, size_t size, bool z
 }
 
 extern inline void* _mi_heap_malloc_zero(mi_heap_t* heap, size_t size, bool zero) mi_attr_noexcept {
+  printk("^^^ _mi_heap_malloc_zero[0]\n");
   return _mi_heap_malloc_zero_ex(heap, size, zero, 0);
 }
 
 mi_decl_nodiscard extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size) mi_attr_noexcept {
+    printk("^^^ mi_heap_malloc[0]\n");
   return _mi_heap_malloc_zero(heap, size, false);
 }
 
 mi_decl_nodiscard extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
+  printk("^^^ mi_malloc[0]\n");
   return mi_heap_malloc(mi_get_default_heap(), size);
 }
 
