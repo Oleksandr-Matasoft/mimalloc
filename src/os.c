@@ -130,8 +130,16 @@ size_t _mi_os_good_alloc_size(size_t size) {
   else if (size < 8*MI_MiB) align_size = 256*MI_KiB;
   else if (size < 32*MI_MiB) align_size = 1*MI_MiB;
   else align_size = 4*MI_MiB;
-  if mi_unlikely(size >= (SIZE_MAX - align_size)) return size; // possible overflow?
-  return _mi_align_up(size, align_size);
+  printk("### _mi_os_good_alloc_size ALIGN_SIZE: %lu", align_size);
+
+  if mi_unlikely(size >= (SIZE_MAX - align_size)) {
+    printk("### ret _mi_os_good_alloc_size[0]: %lu", size);
+    return size;
+  } else {// possible overflow?
+   size_t upsize = _mi_align_up(size, align_size);
+   printk("### ret _mi_os_good_alloc_size[1]: %lu", upsize);
+    return upsize;
+  }
 }
 
 #if defined(_WIN32)
@@ -388,7 +396,9 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
     err = false; // sbrk heap cannot be shrunk
 #else
     // TODO: check 'where to return the memory'
-    /*void*/k_heap_free(NULL, addr); // !!! NOTE  addr and size were here as arg for free function
+    k_free(addr);
+
+   // /*void*/k_heap_free(NULL, addr); // !!! NOTE  addr and size were here as arg for free function
     if (err)
     {
         _mi_warning_message(
@@ -851,6 +861,10 @@ static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, boo
     #ifndef _ZARM64
     int protect_flags = (commit ? (PROT_WRITE | PROT_READ) : PROT_NONE);
     p = mi_unix_mmap(NULL, size, try_alignment, protect_flags, false, allow_large, is_large);
+    #else // _ZARM64
+    // p = k_malloc(size);
+    printk("^^^ Segment align: %lu, size %lu\n", MI_SEGMENT_ALIGN, size);
+    p = k_aligned_alloc(MI_SEGMENT_ALIGN, size);
     #endif
   #endif
   mi_stat_counter_increase(stats->mmap_calls, 1);
@@ -877,7 +891,9 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
   if (p == NULL) return NULL;
 
   // if not aligned, free it, overallocate, and unmap around it
+  _mi_warning_message ("### --- Checking if not aligned\n");
   if (((uintptr_t)p % alignment != 0)) {
+    _mi_warning_message ("### --- Not aligned\n");
     mi_os_mem_free(p, size, commit, stats);
     _mi_warning_message("unable to allocate aligned OS memory directly, fall back to over-allocation (%zu bytes, address: %p, alignment: %zu, commit: %d)\n", size, p, alignment, commit);
     if (size >= (SIZE_MAX - alignment)) return NULL; // overflow

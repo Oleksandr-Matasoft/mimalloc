@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
 project(libmimalloc C CXX)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_EXTENSIONS ON) # POSIX features on embedlog
+set(CMAKE_CXX_EXTENSIONS ON)
+
 option(
   MI_SECURE
   "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)"

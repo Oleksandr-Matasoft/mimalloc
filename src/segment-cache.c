@@ -89,11 +89,11 @@ mi_decl_noinline static void* mi_segment_cache_pop_ex(
   *memid = slot->memid;
   *is_pinned = slot->is_pinned;
   *is_zero = false;
-  *commit_mask = slot->commit_mask;     
+  *commit_mask = slot->commit_mask;
   *decommit_mask = slot->decommit_mask;
   slot->p = NULL;
   mi_atomic_storei64_release(&slot->expire,(mi_msecs_t)0);
-  
+
   // mark the slot as free again
   mi_assert_internal(_mi_bitmap_is_claimed(cache_inuse, MI_CACHE_FIELDS, 1, bitidx));
   _mi_bitmap_unclaim(cache_inuse, MI_CACHE_FIELDS, 1, bitidx);

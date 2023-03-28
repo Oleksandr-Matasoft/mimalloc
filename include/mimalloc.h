@@ -144,6 +144,7 @@ mi_decl_export void mi_register_deferred_free(mi_deferred_free_fun* deferred_fre
 
 typedef void (mi_cdecl mi_output_fun)(const char* msg, void* arg);
 mi_decl_export void mi_register_output(mi_output_fun* out, void* arg) mi_attr_noexcept;
+mi_decl_export mi_output_fun* mi_get_registered_output(void) mi_attr_noexcept;
 
 typedef void (mi_cdecl mi_error_fun)(int err, void* arg);
 mi_decl_export void mi_register_error(mi_error_fun* fun, void* arg);

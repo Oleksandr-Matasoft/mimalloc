@@ -298,6 +298,10 @@ void mi_register_output(mi_output_fun* out, void* arg) mi_attr_noexcept {
   if (out!=NULL) mi_out_buf_flush(out,true,arg);         // output all the delayed output now
 }
 
+mi_output_fun* mi_get_registered_output(void) mi_attr_noexcept {
+  return mi_out_default;
+}
+
 // add stderr to the delayed output after the module is loaded
 static void mi_add_stderr_output() {
   // printk("### mi_add_stderr_output[0]");

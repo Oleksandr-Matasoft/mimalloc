@@ -1,0 +1,8 @@
+# -* - YAML -* -
+# The infra code formatting configuration for clang - format.
+# For LLVM 16: https://releases.llvm.org/16.0.0/tools/clang/docs/ClangFormat.html
+
+# BasedOnStyle: LLVM
+
+DisableFormat: true
+SortIncludes: Never

@@ -608,33 +608,33 @@ static void mi_detect_cpu_features(void) {
 
 // Initialize the process; called by thread_init or the process loader
 void mi_process_init(void) mi_attr_noexcept {
-  // // printk("### mi_process_init [0]\n");
+   printk("### mi_process_init [0]\n");
   // ensure we are called once
   if (_mi_process_is_initialized) return;
-  // // printk("### mi_process_init [1]\n");
+  printk("### mi_process_init [1]\n");
   _mi_verbose_message("process init: 0x%zx\n", _mi_thread_id());
-  // // printk("### mi_process_init [2]\n");
+  printk("### mi_process_init [2]\n");
   _mi_process_is_initialized = true;
-  // // printk("### mi_process_init [3]\n");
+  printk("### mi_process_init [3]\n");
   mi_process_setup_auto_thread_done();
-  // // printk("### mi_process_init [4]\n");
+  printk("### mi_process_init [4]\n");
   mi_detect_cpu_features();
-  // // printk("### mi_process_init [5]\n");
+  printk("### mi_process_init [5]\n");
   _mi_os_init();
-  // // printk("### mi_process_init [6]\n");
+  printk("### mi_process_init [6]\n");
   mi_heap_main_init();
-  // // printk("### mi_process_init [7]\n");
+  printk("### mi_process_init [7]\n");
   #if (MI_DEBUG)
-  // // printk("### mi_process_init [8]\n");
+  printk("### mi_process_init [8]\n");
   _mi_verbose_message("debug level : %d\n", MI_DEBUG);
   #endif
-  // // printk("### mi_process_init [9]\n");
+  printk("### mi_process_init [9]\n");
   _mi_verbose_message("secure level: %d\n", MI_SECURE);
-  // // printk("### mi_process_init [10]\n");
+  printk("### mi_process_init [10]\n");
   _mi_verbose_message("mem tracking: %s\n", MI_TRACK_TOOL);
-  // // printk("### mi_process_init [11]\n");
+  printk("### mi_process_init [11]\n");
   mi_thread_init();
-  // // printk("### mi_process_init [12]\n");
+  printk("### mi_process_init [12]\n");
 
   #if defined(_WIN32) && !defined(MI_SHARED_LIB)
   // When building as a static lib the FLS cleanup happens to early for the main thread.
@@ -643,21 +643,32 @@ void mi_process_init(void) mi_attr_noexcept {
   FlsSetValue(mi_fls_key, NULL);
   #endif
 
+  printk("### mi_process_init [13]\n");
   mi_stats_reset();  // only call stat reset *after* thread init (or the heap tld == NULL)
-  // printk("### mi_process_init [13]\n");
+
+  printk("### mi_process_init [14]\n");
   if (mi_option_is_enabled(mi_option_reserve_huge_os_pages)) {
+    printk("### mi_process_init [15]\n");
     size_t pages = mi_option_get_clamp(mi_option_reserve_huge_os_pages, 0, 128*1024);
+    printk("### mi_process_init [16]\n");
     long reserve_at = mi_option_get(mi_option_reserve_huge_os_pages_at);
+    printk("### mi_process_init [17]\n");
     if (reserve_at != -1) {
       mi_reserve_huge_os_pages_at(pages, reserve_at, pages*500);
+      printk("### mi_process_init [18]\n");
     } else {
       mi_reserve_huge_os_pages_interleave(pages, 0, pages*500);
+      printk("### mi_process_init [19]\n");
     }
   }
   if (mi_option_is_enabled(mi_option_reserve_os_memory)) {
     long ksize = mi_option_get(mi_option_reserve_os_memory);
     if (ksize > 0) {
+      printk("### mi_process_init [20]\n");
       mi_reserve_os_memory((size_t)ksize*MI_KiB, true /* commit? */, true /* allow large pages? */);
+      printk("### mi_process_init [21]\n");
+    } else {
+      printk("### mi_process_init [22]\n");
     }
   }
 }

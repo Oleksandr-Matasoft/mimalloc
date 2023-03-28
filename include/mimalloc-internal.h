@@ -10,6 +10,7 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include "mimalloc-types.h"
 #include "mimalloc-track.h"
+#include "mimalloc-atomic.h"
 
 #if (MI_DEBUG>0)
 #define mi_trace_message(...)  _mi_trace_message(__VA_ARGS__)
@@ -255,13 +256,17 @@ static inline bool _mi_is_aligned(void* p, size_t alignment) {
 
 // Align upwards
 static inline uintptr_t _mi_align_up(uintptr_t sz, size_t alignment) {
+
   mi_assert_internal(alignment != 0);
   uintptr_t mask = alignment - 1;
   if ((alignment & mask) == 0) {  // power of two?
-    return ((sz + mask) & ~mask);
-  }
-  else {
-    return (((sz + mask)/alignment)*alignment);
+    size_t ret = ((sz + mask) & ~mask);
+    printk("### _mi_align_up[0]: returning %lu\n", ret);
+    return ret;
+  } else {
+    size_t ret = (((sz + mask)/alignment)*alignment);
+    printk("### _mi_align_up[1]: returning %lu\n", ret);
+    return ret;
   }
 }
 
@@ -270,10 +275,14 @@ static inline uintptr_t _mi_align_down(uintptr_t sz, size_t alignment) {
   mi_assert_internal(alignment != 0);
   uintptr_t mask = alignment - 1;
   if ((alignment & mask) == 0) { // power of two?
-    return (sz & ~mask);
+    size_t ret = (sz & ~mask);
+    printk("### _mi_align_down[0]: returning %lu\n", ret);
+    return ret;
   }
   else {
-    return ((sz / alignment) * alignment);
+    size_t ret = ((sz / alignment) * alignment);
+     printk("### _mi_align_down[1]: returning %lu\n", ret);
+    return ret;
   }
 }
 

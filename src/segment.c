@@ -349,7 +349,7 @@ static size_t mi_segment_calculate_slices(size_t required, size_t* pre_size, siz
   if (pre_size != NULL) *pre_size = isize;
   isize = _mi_align_up(isize + guardsize, MI_SEGMENT_SLICE_SIZE);
   if (info_slices != NULL) *info_slices = isize / MI_SEGMENT_SLICE_SIZE;
-  size_t segment_size = (required==0 ? MI_SEGMENT_SIZE : _mi_align_up( required + isize + guardsize, MI_SEGMENT_SLICE_SIZE) );  
+  size_t segment_size = (required==0 ? MI_SEGMENT_SIZE : _mi_align_up( required + isize + guardsize, MI_SEGMENT_SLICE_SIZE) );
   mi_assert_internal(segment_size % MI_SEGMENT_SLICE_SIZE == 0);
   return (segment_size / MI_SEGMENT_SLICE_SIZE);
 }
@@ -816,7 +816,7 @@ static mi_segment_t* mi_segment_os_alloc( size_t required, size_t page_alignment
     else {
       mi_commit_mask_create_empty(pcommit_mask);
     }
-  }    
+  }
   mi_assert_internal(segment != NULL && (uintptr_t)segment % MI_SEGMENT_SIZE == 0);
 
   const size_t commit_needed = _mi_divide_up((*pinfo_slices)*MI_SEGMENT_SLICE_SIZE, MI_COMMIT_SIZE);
