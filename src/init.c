@@ -171,26 +171,26 @@ mi_stats_t _mi_stats_main = { MI_STATS_NULL };
 
 
 static void mi_heap_main_init(void) {
-  // printk("### mi_heap_main_init [0]");
+  printk("### mi_heap_main_init [0]");
   if (_mi_heap_main.cookie == 0) {
-    // printk("### mi_heap_main_init [1]");
+    printk("### mi_heap_main_init [1]");
     _mi_heap_main.thread_id = _mi_thread_id();
-    // printk("### mi_heap_main_init [2]");
+    printk("### mi_heap_main_init [2]");
     _mi_heap_main.cookie = 1;
-    // printk("### mi_heap_main_init [3]");
+    printk("### mi_heap_main_init [3]");
     #if defined(_WIN32) && !defined(MI_SHARED_LIB)
       _mi_random_init_weak(&_mi_heap_main.random);    // prevent allocation failure during bcrypt dll initialization with static linking
-   // printk("### mi_heap_main_init [4]");
+   printk("### mi_heap_main_init [4]");
     #else
       _mi_random_init(&_mi_heap_main.random);
-      // printk("### mi_heap_main_init [5]");
+      printk("### mi_heap_main_init [5]");
     #endif
     _mi_heap_main.cookie  = _mi_heap_random_next(&_mi_heap_main);
-    // printk("### mi_heap_main_init [6]");
+    printk("### mi_heap_main_init [6]");
     _mi_heap_main.keys[0] = _mi_heap_random_next(&_mi_heap_main);
-    // printk("### mi_heap_main_init [7]");
+    printk("### mi_heap_main_init [7]");
     _mi_heap_main.keys[1] = _mi_heap_random_next(&_mi_heap_main);
-    // printk("### mi_heap_main_init [8]");
+    printk("### mi_heap_main_init [8]");
   }
 }
 
@@ -415,29 +415,29 @@ static void _mi_thread_done(mi_heap_t* default_heap);
 
 // Set up handlers so `mi_thread_done` is called automatically
 static void mi_process_setup_auto_thread_done(void) {
-  // printk("### mi_process_setup_auto_thread_done[0]");
+  printk("### mi_process_setup_auto_thread_done[0]");
   static bool tls_initialized = false; // fine if it races
-  // printk("### mi_process_setup_auto_thread_done[1]");
+  printk("### mi_process_setup_auto_thread_done[1]");
   if (tls_initialized) return;
-  // printk("### mi_process_setup_auto_thread_done[2]");
+  printk("### mi_process_setup_auto_thread_done[2]");
   tls_initialized = true;
-  // printk("### mi_process_setup_auto_thread_done[3]");
+  printk("### mi_process_setup_auto_thread_done[3]");
   #if defined(_WIN32) && defined(MI_SHARED_LIB)
-  // printk("### mi_process_setup_auto_thread_done[4]");
+  printk("### mi_process_setup_auto_thread_done[4]");
     // nothing to do as it is done in DllMain
   #elif defined(_WIN32) && !defined(MI_SHARED_LIB)
-  // printk("### mi_process_setup_auto_thread_done[5]");
+  printk("### mi_process_setup_auto_thread_done[5]");
     mi_fls_key = FlsAlloc(&mi_fls_done);
-  // printk("### mi_process_setup_auto_thread_done[6]");
+  printk("### mi_process_setup_auto_thread_done[6]");
   #elif defined(MI_USE_PTHREADS)
-  // printk("### mi_process_setup_auto_thread_done[7]");
+  printk("### mi_process_setup_auto_thread_done[7]");
     mi_assert_internal(_mi_heap_default_key == (pthread_key_t)(-1));
-    // printk("### mi_process_setup_auto_thread_done[8]");
+    printk("### mi_process_setup_auto_thread_done[8]");
     pthread_key_create(&_mi_heap_default_key, &mi_pthread_done);
-    // printk("### mi_process_setup_auto_thread_done[9]");
+    printk("### mi_process_setup_auto_thread_done[9]");
   #endif
   _mi_heap_set_default_direct(&_mi_heap_main);
-  // printk("### mi_process_setup_auto_thread_done[]");
+  printk("### mi_process_setup_auto_thread_done[]");
 }
 
 
@@ -503,7 +503,11 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
     FlsSetValue(mi_fls_key, heap);
   #elif defined(MI_USE_PTHREADS)
   if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
+  #ifdef _ZARM64
+    k_thread_custom_data_set((void*)&heap);
+  #else
     pthread_setspecific(_mi_heap_default_key, heap);
+  #endif
   }
   #endif
 }
@@ -608,10 +612,12 @@ static void mi_detect_cpu_features(void) {
 
 // Initialize the process; called by thread_init or the process loader
 void mi_process_init(void) mi_attr_noexcept {
+   //__ASSERT(0, "msg");
    printk("### mi_process_init [0]\n");
   // ensure we are called once
   if (_mi_process_is_initialized) return;
   printk("### mi_process_init [1]\n");
+  printk("--- %zx\n", _mi_thread_id());
   _mi_verbose_message("process init: 0x%zx\n", _mi_thread_id());
   printk("### mi_process_init [2]\n");
   _mi_process_is_initialized = true;
@@ -760,14 +766,19 @@ if (!_mi_process_is_initialized) return;
 
 #elif defined(__GNUC__) || defined(__clang__)
   // GCC,Clang: use the constructor attribute
-  static void __attribute__((constructor)) _mi_process_init(void) {
+void z_arm64_print(const char *str, void *args)
+{
+    (void)args;
+
+    printk("%s\n", str);
+}
+static void __attribute__((constructor)) _mi_process_init(void) {
     printk("$!$$$$$ --- CONSTRUCTOR --- $$$$$$$$$$$$$$$$\n");
-    // mi_process_load();
-  }
-  // static void _mi_process_init(void) {
-  //   printk("$$$$$$$ --- CONSTRUCTOR --- $$$$$$$$$$$$$$$$\n");
-  //   //mi_process_load();
-  // }
+#ifdef _ZARM64
+    mi_register_output(z_arm64_print, NULL);
+#endif
+    mi_process_load();
+}
 
 #else
 #pragma message("define a way to call mi_process_load on your platform")

@@ -423,7 +423,11 @@ static inline mi_heap_t* mi_get_default_heap(void) {
   mi_heap_t* heap = *mi_tls_pthread_heap_slot();
   return (mi_unlikely(heap == NULL) ? (mi_heap_t*)&_mi_heap_empty : heap);
 #elif defined(MI_TLS_PTHREAD)
+#ifdef _ZARM64
+  mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)k_thread_custom_data_get());
+#else
   mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)pthread_getspecific(_mi_heap_default_key));
+#endif
   return (mi_unlikely(heap == NULL) ? (mi_heap_t*)&_mi_heap_empty : heap);
 #else
   #if defined(MI_TLS_RECURSE_GUARD)
