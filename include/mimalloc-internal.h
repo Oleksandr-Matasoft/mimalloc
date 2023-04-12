@@ -261,11 +261,9 @@ static inline uintptr_t _mi_align_up(uintptr_t sz, size_t alignment) {
   uintptr_t mask = alignment - 1;
   if ((alignment & mask) == 0) {  // power of two?
     size_t ret = ((sz + mask) & ~mask);
-    printk("### _mi_align_up[0]: returning %lu\n", ret);
     return ret;
   } else {
     size_t ret = (((sz + mask)/alignment)*alignment);
-    printk("### _mi_align_up[1]: returning %lu\n", ret);
     return ret;
   }
 }
@@ -276,12 +274,10 @@ static inline uintptr_t _mi_align_down(uintptr_t sz, size_t alignment) {
   uintptr_t mask = alignment - 1;
   if ((alignment & mask) == 0) { // power of two?
     size_t ret = (sz & ~mask);
-    printk("### _mi_align_down[0]: returning %lu\n", ret);
     return ret;
   }
   else {
     size_t ret = ((sz / alignment) * alignment);
-     printk("### _mi_align_down[1]: returning %lu\n", ret);
     return ret;
   }
 }
@@ -400,7 +396,9 @@ static inline mi_heap_t** mi_tls_pthread_heap_slot(void) {
   return (mi_heap_t**)((uint8_t*)self + MI_TLS_PTHREAD_SLOT_OFS);
 }
 #elif defined(MI_TLS_PTHREAD)
+#ifndef _ZARM64
 extern pthread_key_t _mi_heap_default_key;
+#endif
 #endif
 
 // Default heap to allocate from (if not using TLS- or pthread slots).
@@ -424,7 +422,7 @@ static inline mi_heap_t* mi_get_default_heap(void) {
   return (mi_unlikely(heap == NULL) ? (mi_heap_t*)&_mi_heap_empty : heap);
 #elif defined(MI_TLS_PTHREAD)
 #ifdef _ZARM64
-  mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)k_thread_custom_data_get());
+  mi_heap_t* heap = (mi_heap_t*)k_thread_custom_data_get();
 #else
   mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)pthread_getspecific(_mi_heap_default_key));
 #endif

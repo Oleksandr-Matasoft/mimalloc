@@ -785,7 +785,7 @@ static mi_segment_t* mi_segment_os_alloc( size_t required, size_t page_alignment
   size_t memid = 0;
   size_t align_offset = 0;
   size_t alignment = MI_SEGMENT_ALIGN;
-  
+
   if (page_alignment > 0) {
     // mi_assert_internal(huge_page != NULL);
     mi_assert_internal(page_alignment >= MI_SEGMENT_ALIGN);

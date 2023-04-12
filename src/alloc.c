@@ -93,7 +93,7 @@ static inline mi_decl_restrict void* mi_heap_malloc_small_zero(mi_heap_t* heap, 
   mi_assert(heap != NULL);
   #if MI_DEBUG
   const uintptr_t tid = _mi_thread_id();
-  mi_assert(heap->thread_id == 0 || heap->thread_id == tid); // heaps are thread local
+  //mi_assert(heap->thread_id == 0 || heap->thread_id == tid); // heaps are thread local
   #endif
   mi_assert(size <= MI_SMALL_SIZE_MAX);
 #if (MI_PADDING)
@@ -146,17 +146,14 @@ extern inline void* _mi_heap_malloc_zero_ex(mi_heap_t* heap, size_t size, bool z
 }
 
 extern inline void* _mi_heap_malloc_zero(mi_heap_t* heap, size_t size, bool zero) mi_attr_noexcept {
-  printk("^^^ _mi_heap_malloc_zero[0]\n");
   return _mi_heap_malloc_zero_ex(heap, size, zero, 0);
 }
 
 mi_decl_nodiscard extern inline mi_decl_restrict void* mi_heap_malloc(mi_heap_t* heap, size_t size) mi_attr_noexcept {
-    printk("^^^ mi_heap_malloc[0]\n");
   return _mi_heap_malloc_zero(heap, size, false);
 }
 
 mi_decl_nodiscard extern inline mi_decl_restrict void* mi_malloc(size_t size) mi_attr_noexcept {
-  printk("^^^ mi_malloc[0]\n");
   return mi_heap_malloc(mi_get_default_heap(), size);
 }
 

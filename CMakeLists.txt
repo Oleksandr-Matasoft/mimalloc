@@ -20,7 +20,7 @@ option(
 option(
   MI_OVERRIDE
   "Override the standard malloc interface (e.g. define entry points for malloc() etc)"
-  OFF)
+  ON)
 option(MI_XMALLOC "Enable abort() call on memory allocation failure by default"
   OFF)
 option(

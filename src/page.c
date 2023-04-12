@@ -115,7 +115,7 @@ bool _mi_page_is_valid(mi_page_t* page) {
     #if MI_HUGE_PAGE_ABANDON
     if (segment->kind != MI_SEGMENT_HUGE) 
     #endif
-    {    
+    {
       mi_page_queue_t* pq = mi_page_queue_of(page);
       mi_assert_internal(mi_page_queue_contains(pq, page));
       mi_assert_internal(pq->block_size==mi_page_block_size(page) || mi_page_block_size(page) > MI_MEDIUM_OBJ_SIZE_MAX || mi_page_is_in_full(page));

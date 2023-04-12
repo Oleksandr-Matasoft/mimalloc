@@ -171,26 +171,17 @@ mi_stats_t _mi_stats_main = { MI_STATS_NULL };
 
 
 static void mi_heap_main_init(void) {
-  printk("### mi_heap_main_init [0]");
   if (_mi_heap_main.cookie == 0) {
-    printk("### mi_heap_main_init [1]");
     _mi_heap_main.thread_id = _mi_thread_id();
-    printk("### mi_heap_main_init [2]");
     _mi_heap_main.cookie = 1;
-    printk("### mi_heap_main_init [3]");
     #if defined(_WIN32) && !defined(MI_SHARED_LIB)
       _mi_random_init_weak(&_mi_heap_main.random);    // prevent allocation failure during bcrypt dll initialization with static linking
-   printk("### mi_heap_main_init [4]");
     #else
       _mi_random_init(&_mi_heap_main.random);
-      printk("### mi_heap_main_init [5]");
     #endif
     _mi_heap_main.cookie  = _mi_heap_random_next(&_mi_heap_main);
-    printk("### mi_heap_main_init [6]");
     _mi_heap_main.keys[0] = _mi_heap_random_next(&_mi_heap_main);
-    printk("### mi_heap_main_init [7]");
     _mi_heap_main.keys[1] = _mi_heap_random_next(&_mi_heap_main);
-    printk("### mi_heap_main_init [8]");
   }
 }
 
@@ -276,7 +267,7 @@ static void mi_thread_data_collect(void) {
 static bool _mi_heap_init(void) {
   if (mi_heap_is_initialized(mi_get_default_heap())) return true;
   if (_mi_is_main_thread()) {
-    // mi_assert_internal(_mi_heap_main.thread_id != 0);  // can happen on freeBSD where alloc is called before any initialization
+    mi_assert_internal(_mi_heap_main.thread_id != 0);  // can happen on freeBSD where alloc is called before any initialization
     // the main heap is statically allocated
     mi_heap_main_init();
     _mi_heap_set_default_direct(&_mi_heap_main);
@@ -403,10 +394,13 @@ static void _mi_thread_done(mi_heap_t* default_heap);
 #elif defined(MI_USE_PTHREADS)
   // use pthread local storage keys to detect thread ending
   // (and used with MI_TLS_PTHREADS for the default heap)
+#ifndef _ZARM64
   pthread_key_t _mi_heap_default_key = (pthread_key_t)(-1);
   static void mi_pthread_done(void* value) {
     if (value!=NULL) _mi_thread_done((mi_heap_t*)value);
   }
+#endif // _ZARM64
+
 #elif defined(__wasi__)
 // no pthreads in the WebAssembly Standard Interface
 #else
@@ -415,29 +409,21 @@ static void _mi_thread_done(mi_heap_t* default_heap);
 
 // Set up handlers so `mi_thread_done` is called automatically
 static void mi_process_setup_auto_thread_done(void) {
-  printk("### mi_process_setup_auto_thread_done[0]");
   static bool tls_initialized = false; // fine if it races
-  printk("### mi_process_setup_auto_thread_done[1]");
   if (tls_initialized) return;
-  printk("### mi_process_setup_auto_thread_done[2]");
   tls_initialized = true;
-  printk("### mi_process_setup_auto_thread_done[3]");
   #if defined(_WIN32) && defined(MI_SHARED_LIB)
-  printk("### mi_process_setup_auto_thread_done[4]");
     // nothing to do as it is done in DllMain
   #elif defined(_WIN32) && !defined(MI_SHARED_LIB)
-  printk("### mi_process_setup_auto_thread_done[5]");
     mi_fls_key = FlsAlloc(&mi_fls_done);
-  printk("### mi_process_setup_auto_thread_done[6]");
   #elif defined(MI_USE_PTHREADS)
-  printk("### mi_process_setup_auto_thread_done[7]");
+  #ifndef _ZARM64
     mi_assert_internal(_mi_heap_default_key == (pthread_key_t)(-1));
-    printk("### mi_process_setup_auto_thread_done[8]");
     pthread_key_create(&_mi_heap_default_key, &mi_pthread_done);
-    printk("### mi_process_setup_auto_thread_done[9]");
+  #endif
+
   #endif
   _mi_heap_set_default_direct(&_mi_heap_main);
-  printk("### mi_process_setup_auto_thread_done[]");
 }
 
 
@@ -502,13 +488,15 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
     mi_assert_internal(mi_fls_key != 0);
     FlsSetValue(mi_fls_key, heap);
   #elif defined(MI_USE_PTHREADS)
-  if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
+ // can happen during recursive invocation on freeBSD
   #ifdef _ZARM64
     k_thread_custom_data_set((void*)&heap);
   #else
+  if (_mi_heap_default_key != (pthread_key_t)(-1)) {
     pthread_setspecific(_mi_heap_default_key, heap);
-  #endif
   }
+  #endif
+
   #endif
 }
 
@@ -612,35 +600,23 @@ static void mi_detect_cpu_features(void) {
 
 // Initialize the process; called by thread_init or the process loader
 void mi_process_init(void) mi_attr_noexcept {
-   //__ASSERT(0, "msg");
-   printk("### mi_process_init [0]\n");
   // ensure we are called once
   if (_mi_process_is_initialized) return;
-  printk("### mi_process_init [1]\n");
-  printk("--- %zx\n", _mi_thread_id());
+
   _mi_verbose_message("process init: 0x%zx\n", _mi_thread_id());
-  printk("### mi_process_init [2]\n");
+
   _mi_process_is_initialized = true;
-  printk("### mi_process_init [3]\n");
+
   mi_process_setup_auto_thread_done();
-  printk("### mi_process_init [4]\n");
   mi_detect_cpu_features();
-  printk("### mi_process_init [5]\n");
   _mi_os_init();
-  printk("### mi_process_init [6]\n");
   mi_heap_main_init();
-  printk("### mi_process_init [7]\n");
   #if (MI_DEBUG)
-  printk("### mi_process_init [8]\n");
   _mi_verbose_message("debug level : %d\n", MI_DEBUG);
   #endif
-  printk("### mi_process_init [9]\n");
   _mi_verbose_message("secure level: %d\n", MI_SECURE);
-  printk("### mi_process_init [10]\n");
   _mi_verbose_message("mem tracking: %s\n", MI_TRACK_TOOL);
-  printk("### mi_process_init [11]\n");
   mi_thread_init();
-  printk("### mi_process_init [12]\n");
 
   #if defined(_WIN32) && !defined(MI_SHARED_LIB)
   // When building as a static lib the FLS cleanup happens to early for the main thread.
@@ -649,32 +625,22 @@ void mi_process_init(void) mi_attr_noexcept {
   FlsSetValue(mi_fls_key, NULL);
   #endif
 
-  printk("### mi_process_init [13]\n");
   mi_stats_reset();  // only call stat reset *after* thread init (or the heap tld == NULL)
 
-  printk("### mi_process_init [14]\n");
   if (mi_option_is_enabled(mi_option_reserve_huge_os_pages)) {
-    printk("### mi_process_init [15]\n");
     size_t pages = mi_option_get_clamp(mi_option_reserve_huge_os_pages, 0, 128*1024);
-    printk("### mi_process_init [16]\n");
     long reserve_at = mi_option_get(mi_option_reserve_huge_os_pages_at);
-    printk("### mi_process_init [17]\n");
     if (reserve_at != -1) {
       mi_reserve_huge_os_pages_at(pages, reserve_at, pages*500);
-      printk("### mi_process_init [18]\n");
     } else {
       mi_reserve_huge_os_pages_interleave(pages, 0, pages*500);
-      printk("### mi_process_init [19]\n");
     }
   }
   if (mi_option_is_enabled(mi_option_reserve_os_memory)) {
     long ksize = mi_option_get(mi_option_reserve_os_memory);
     if (ksize > 0) {
-      printk("### mi_process_init [20]\n");
       mi_reserve_os_memory((size_t)ksize*MI_KiB, true /* commit? */, true /* allow large pages? */);
-      printk("### mi_process_init [21]\n");
     } else {
-      printk("### mi_process_init [22]\n");
     }
   }
 }
@@ -773,7 +739,6 @@ void z_arm64_print(const char *str, void *args)
     printk("%s\n", str);
 }
 static void __attribute__((constructor)) _mi_process_init(void) {
-    printk("$!$$$$$ --- CONSTRUCTOR --- $$$$$$$$$$$$$$$$\n");
 #ifdef _ZARM64
     mi_register_output(z_arm64_print, NULL);
 #endif

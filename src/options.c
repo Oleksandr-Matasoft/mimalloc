@@ -103,29 +103,20 @@ static mi_option_desc_t options[_mi_option_last] =
 static void mi_option_init(mi_option_desc_t* desc);
 
 void _mi_options_init(void) {
-  // // printk("### _mi_options_init[0]");
   // called on process load; should not be called before the CRT is initialized!
   // (e.g. do not call this from process_init as that may run before CRT initialization)
   mi_add_stderr_output(); // now it safe to use stderr for output
-  // // printk("### _mi_options_init[1]");
   for(int i = 0; i < _mi_option_last; i++ ) {
-    // // printk("### _mi_options_init[2]");
     mi_option_t option = (mi_option_t)i;
-    // // printk("### _mi_options_init[3]");
     long l = mi_option_get(option); MI_UNUSED(l); // initialize
-    // // printk("### _mi_options_init[4]");
-    // if (option != mi_option_verbose)
+    if (option != mi_option_verbose)
     {
       mi_option_desc_t* desc = &options[option];
-      // // printk("### _mi_options_init[5]");
       _mi_verbose_message("option '%s': %ld\n", desc->name, desc->value);
-      // // printk("### _mi_options_init[6]");
     }
   }
   mi_max_error_count = mi_option_get(mi_option_max_errors);
-  // // printk("### _mi_options_init[7]");
   mi_max_warning_count = mi_option_get(mi_option_max_warnings);
-  // // printk("### _mi_options_init[8]");
 }
 
 mi_decl_nodiscard long mi_option_get(mi_option_t option) {
@@ -246,25 +237,16 @@ static void mi_cdecl mi_out_buf(const char* msg, void* arg) {
 }
 
 static void mi_out_buf_flush(mi_output_fun* out, bool no_more_buf, void* arg) {
-  printk("$$$ mi_out_buf_flush[0]\n");
   if (out==NULL) return;
-  printk("$$$ mi_out_buf_flush[1]\n");
   // claim (if `no_more_buf == true`, no more output will be added after this point)
   size_t count = mi_atomic_add_acq_rel(&out_len, (no_more_buf ? MI_MAX_DELAY_OUTPUT : 1));
-  printk("$$$ mi_out_buf_flush[2]\n");
   // and output the current contents
   if (count>MI_MAX_DELAY_OUTPUT) count = MI_MAX_DELAY_OUTPUT;
-  printk("$$$ mi_out_buf_flush[3]\n");
   out_buf[count] = 0;
-  printk("$$$ mi_out_buf_flush[4]\n");
   out(out_buf,arg);
-  printk("$$$ mi_out_buf_flush[5]\n");
   if (!no_more_buf) {
-    printk("$$$ mi_out_buf_flush[6]\n");
     out_buf[count] = '\n'; // if continue with the buffer, insert a newline
-    printk("$$$ mi_out_buf_flush[7]\n");
   }
-  printk("$$$ mi_out_buf_flush[8]\n");
 }
 
 
