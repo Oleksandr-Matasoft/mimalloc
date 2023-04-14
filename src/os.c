@@ -35,7 +35,11 @@ terms of the MIT license. A copy of the license can be found in the file
 #elif defined(__wasi__)
 #include <unistd.h>    // sbrk
 #else
+
+#ifndef _ZARM64
 #include <sys/mman.h>  // mmap
+#endif // _ZARM64
+
 #include <unistd.h>    // sysconf
 #if defined(__linux__)
 #include <features.h>
@@ -277,12 +281,18 @@ static void os_detect_overcommit(void) {
 
 void _mi_os_init(void) {
   // get the page size
+#ifdef _ZARM64
+  os_page_size = 4096;
+  os_alloc_granularity = os_page_size;
+  large_os_page_size = 2*MI_MiB;
+#else
   long result = sysconf(_SC_PAGESIZE);
   if (result > 0) {
     os_page_size = (size_t)result;
     os_alloc_granularity = os_page_size;
   }
   large_os_page_size = 2*MI_MiB; // TODO: can we query the OS for this?
+#endif //
   os_detect_overcommit();
 }
 #endif
@@ -379,10 +389,12 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 #elif defined(MI_USE_SBRK) || defined(__wasi__)
   err = false; // sbrk heap cannot be shrunk
 #else
+#ifndef _ZARM64
   err = (munmap(addr, size) == -1);
   if (err) {
     _mi_warning_message("unable to release OS memory: %s, addr: %p, size: %zu\n", strerror(errno), addr, size);
   }
+#endif // _ZARM64
 #endif
   if (was_committed) { _mi_stat_decrease(&stats->committed, size); }
   _mi_stat_decrease(&stats->reserved, size);
@@ -390,12 +402,13 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 }
 
 
+
 /* -----------------------------------------------------------
   Raw allocation on Windows (VirtualAlloc)
 -------------------------------------------------------------- */
 
 #ifdef _WIN32
- 
+
 #define MEM_COMMIT_RESERVE  (MEM_COMMIT|MEM_RESERVE)
 
 static void* mi_win_virtual_allocx(void* addr, size_t size, size_t try_alignment, DWORD flags) {
@@ -544,6 +557,7 @@ static void* mi_heap_grow(size_t size, size_t try_alignment) {
   Raw allocation on Unix's (mmap)
 -------------------------------------------------------------- */
 #else
+#if !(defined(_ZARM64))
 #define MI_OS_USE_MMAP
 static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int protect_flags, int flags, int fd) {
   MI_UNUSED(try_alignment);
@@ -581,6 +595,8 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
   // failed to allocate
   return NULL;
 }
+#endif
+#endif
 
 static int mi_unix_mmap_fd(void) {
 #if defined(VM_MAKE_TAG)
@@ -593,6 +609,7 @@ static int mi_unix_mmap_fd(void) {
 #endif
 }
 
+#ifndef _ZARM64
 static void* mi_unix_mmap(void* addr, size_t size, size_t try_alignment, int protect_flags, bool large_only, bool allow_large, bool* is_large) {
   void* p = NULL;
   #if !defined(MAP_ANONYMOUS)
@@ -706,6 +723,7 @@ static void* mi_unix_mmap(void* addr, size_t size, size_t try_alignment, int pro
 
 // Note: the `try_alignment` is just a hint and the returned pointer is not guaranteed to be aligned.
 static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, bool allow_large, bool* is_large, mi_stats_t* stats) {
+  (void)allow_large;
   mi_assert_internal(size > 0 && (size % _mi_os_page_size()) == 0);
   if (size == 0) return NULL;
   if (!commit) allow_large = false;
@@ -731,8 +749,13 @@ static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, boo
     *is_large = false;
     p = mi_heap_grow(size, try_alignment);
   #else
+#ifdef _ZARM64
+printk("### %lld, %ld bytes\n", MI_SEGMENT_SIZE, size);
+    p = k_aligned_alloc(MI_SEGMENT_SIZE, size);
+#else
     int protect_flags = (commit ? (PROT_WRITE | PROT_READ) : PROT_NONE);
     p = mi_unix_mmap(NULL, size, try_alignment, protect_flags, false, allow_large, is_large);
+#endif
   #endif
   mi_stat_counter_increase(stats->mmap_calls, 1);
   if (p != NULL) {
@@ -967,9 +990,11 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
   #else
   // Linux, macOSX and others.
   if (commit) {
+#ifndef _ZARM64
     // commit: ensure we can access the area
     err = mprotect(start, csize, (PROT_READ | PROT_WRITE));
     if (err != 0) { err = errno; }
+#endif // _ZARM64
   }
   else {
     #if defined(MADV_DONTNEED) && MI_DEBUG == 0 && MI_SECURE == 0
@@ -978,8 +1003,10 @@ static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservativ
     err = madvise(start, csize, MADV_DONTNEED);
     #else
     // decommit: just disable access (also used in debug and secure mode to trap on illegal access)
+#ifndef _ZARM64
     err = mprotect(start, csize, PROT_NONE);
     if (err != 0) { err = errno; }
+#endif // _ZARM64
     #endif
     //#if defined(MADV_FREE_REUSE)
     //  while ((err = mi_madvise(start, csize, MADV_FREE_REUSE)) != 0 && errno == EAGAIN) { errno = 0; }
@@ -1056,6 +1083,7 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
   }
 #elif defined(__wasi__)
   int err = 0;
+  #ifndef _ZARM64
 #else
   int err = mi_madvise(start, csize, MADV_DONTNEED);
 #endif
@@ -1065,6 +1093,7 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
   //mi_assert(err == 0);
   if (err != 0) return false;
 #endif
+  #endif
   return true;
 }
 
@@ -1106,13 +1135,17 @@ static  bool mi_os_protectx(void* addr, size_t size, bool protect) {
 #elif defined(__wasi__)
   err = 0;
 #else
+#ifndef _ZARM64
   err = mprotect(start, csize, protect ? PROT_NONE : (PROT_READ | PROT_WRITE));
   if (err != 0) { err = errno; }
+#endif // _ZARM64
 #endif
+#ifndef _ZARM64
   if (err != 0) {
     _mi_warning_message("mprotect error: start: %p, csize: 0x%zx, err: %i\n", start, csize, err);
     mi_mprotect_hint(err);
   }
+#endif // _ZARM64
   return (err == 0);
 }
 

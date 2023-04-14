@@ -408,8 +408,10 @@ static void mi_process_setup_auto_thread_done(void) {
   #elif defined(_WIN32) && !defined(MI_SHARED_LIB)
     mi_fls_key = FlsAlloc(&mi_fls_done);
   #elif defined(MI_USE_PTHREADS)
+#ifndef _ZARM64
     mi_assert_internal(_mi_heap_default_key == (pthread_key_t)(-1));
     pthread_key_create(&_mi_heap_default_key, &mi_pthread_done);
+#endif // _ZARM64
   #endif
   _mi_heap_set_default_direct(&_mi_heap_main);
 }
@@ -476,9 +478,13 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
     mi_assert_internal(mi_fls_key != 0);
     FlsSetValue(mi_fls_key, heap);
   #elif defined(MI_USE_PTHREADS)
+#ifdef _ZARM64
+    k_thread_custom_data_set(heap);
+#else
   if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
     pthread_setspecific(_mi_heap_default_key, heap);
   }
+#endif
   #endif
 }
 
@@ -486,7 +492,7 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
 // --------------------------------------------------------
 // Run functions on process init/done, and thread init/done
 // --------------------------------------------------------
-static void mi_cdecl mi_process_done(void);
+void mi_process_done(void);
 
 static bool os_preloading = true;    // true until this module is initialized
 static bool mi_redirected = false;   // true if malloc redirects to mi_malloc
@@ -621,7 +627,7 @@ void mi_process_init(void) mi_attr_noexcept {
 }
 
 // Called when the process is done (through `at_exit`)
-static void mi_cdecl mi_process_done(void) {
+void mi_process_done(void) {
   // only shutdown if we were initialized
   if (!_mi_process_is_initialized) return;
   // ensure we are called once
@@ -706,8 +712,19 @@ static void mi_cdecl mi_process_done(void) {
   static bool mi_initialized = _mi_process_init();
 
 #elif defined(__GNUC__) || defined(__clang__)
+#ifdef _ZARM64
+static void z_arm64_print(const char *str, void *args)
+{
+    (void)args;
+
+    printk("%s\n", str);
+}
+#endif
   // GCC,Clang: use the constructor attribute
   static void __attribute__((constructor)) _mi_process_init(void) {
+#ifdef _ZARM64
+    mi_register_output(z_arm64_print, NULL);
+#endif
     mi_process_load();
   }
 

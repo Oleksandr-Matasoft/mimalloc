@@ -407,8 +407,8 @@ if (MI_BUILD_STATIC)
     set_target_properties(mimalloc-static PROPERTIES OUTPUT_NAME ${mi_basename})
   endif()
 
-  install(TARGETS mimalloc-static EXPORT mimalloc DESTINATION ${mi_install_objdir} LIBRARY)
-  install(EXPORT mimalloc DESTINATION ${mi_install_cmakedir})
+  # install(TARGETS mimalloc-static EXPORT mimalloc DESTINATION
+  #   ${mi_install_objdir} LIBRARY)
 endif()
 
 # install include files
