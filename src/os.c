@@ -750,7 +750,6 @@ static void* mi_os_mem_alloc(size_t size, size_t try_alignment, bool commit, boo
     p = mi_heap_grow(size, try_alignment);
   #else
 #ifdef _ZARM64
-printk("### %lld, %ld bytes\n", MI_SEGMENT_SIZE, size);
     p = k_aligned_alloc(MI_SEGMENT_SIZE, size);
 #else
     int protect_flags = (commit ? (PROT_WRITE | PROT_READ) : PROT_NONE);

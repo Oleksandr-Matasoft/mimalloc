@@ -408,10 +408,12 @@ static void mi_process_setup_auto_thread_done(void) {
   #elif defined(_WIN32) && !defined(MI_SHARED_LIB)
     mi_fls_key = FlsAlloc(&mi_fls_done);
   #elif defined(MI_USE_PTHREADS)
-#ifndef _ZARM64
+#ifdef _ZARM64
+    _mi_heap_default_key = 1; // dummy for the logic
+#else
     mi_assert_internal(_mi_heap_default_key == (pthread_key_t)(-1));
     pthread_key_create(&_mi_heap_default_key, &mi_pthread_done);
-#endif // _ZARM64
+#endif
   #endif
   _mi_heap_set_default_direct(&_mi_heap_main);
 }
@@ -467,6 +469,8 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
   #elif defined(MI_TLS_PTHREAD)
   // we use _mi_heap_default_key
   #else
+  const volatile mi_heap_t* hd = heap;
+  (void)hd;
   _mi_heap_default = heap;
   #endif
 
@@ -478,8 +482,11 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
     mi_assert_internal(mi_fls_key != 0);
     FlsSetValue(mi_fls_key, heap);
   #elif defined(MI_USE_PTHREADS)
+
 #ifdef _ZARM64
+if (_mi_heap_default_key != (pthread_key_t)(-1)) {
     k_thread_custom_data_set(heap);
+  }
 #else
   if (_mi_heap_default_key != (pthread_key_t)(-1)) {  // can happen during recursive invocation on freeBSD
     pthread_setspecific(_mi_heap_default_key, heap);
@@ -586,6 +593,7 @@ static void mi_detect_cpu_features(void) {
 void mi_process_init(void) mi_attr_noexcept {
   // ensure we are called once
   if (_mi_process_is_initialized) return;
+
   _mi_verbose_message("process init: 0x%zx\n", _mi_thread_id());
   _mi_process_is_initialized = true;
   mi_process_setup_auto_thread_done();

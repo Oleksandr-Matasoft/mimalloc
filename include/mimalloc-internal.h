@@ -8,6 +8,12 @@ terms of the MIT license. A copy of the license can be found in the file
 #ifndef MIMALLOC_INTERNAL_H
 #define MIMALLOC_INTERNAL_H
 
+#ifdef _ZARM64
+  #include <zephyr/kernel.h>
+#else
+  #include <stdio.h>
+#endif // _ZARM64
+
 #include "mimalloc-types.h"
 #include "mimalloc-track.h"
 
@@ -371,7 +377,7 @@ mi_heap_t*  _mi_heap_main_get(void);    // statically allocated main backing hea
 // #elif defined(__DragonFly__)
 // #warning "mimalloc is not working correctly on DragonFly yet."
 // #define MI_TLS_PTHREAD_SLOT_OFS   (4 + 1*sizeof(void*))  // offset `uniqueid` (also used by gdb?) <https://github.com/DragonFlyBSD/DragonFlyBSD/blob/master/lib/libthread_xu/thread/thr_private.h#L458>
-#elif defined(__ANDROID__)
+#elif defined(__ANDROID__) || defined(_ZARM64)
 // See issue #381
 #define MI_TLS_PTHREAD
 #endif
@@ -414,7 +420,11 @@ static inline mi_heap_t* mi_get_default_heap(void) {
   mi_heap_t* heap = *mi_tls_pthread_heap_slot();
   return (mi_unlikely(heap == NULL) ? (mi_heap_t*)&_mi_heap_empty : heap);
 #elif defined(MI_TLS_PTHREAD)
+#ifdef _ZARM64
+  mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)k_thread_custom_data_get());
+#else
   mi_heap_t* heap = (mi_unlikely(_mi_heap_default_key == (pthread_key_t)(-1)) ? _mi_heap_main_get() : (mi_heap_t*)pthread_getspecific(_mi_heap_default_key));
+#endif
   return (mi_unlikely(heap == NULL) ? (mi_heap_t*)&_mi_heap_empty : heap);
 #else
   #if defined(MI_TLS_RECURSE_GUARD)
@@ -852,7 +862,7 @@ static inline mi_threadid_t _mi_thread_id(void) mi_attr_noexcept {
 // both the OS and libc implementation so we use specific tests for each main platform.
 // If you test on another platform and it works please send a PR :-)
 // see also https://akkadia.org/drepper/tls.pdf for more info on the TLS register.
-#elif defined(__GNUC__) && ( \
+#elif 0 && defined(__GNUC__) && ( \
            (defined(__GLIBC__)   && (defined(__x86_64__) || defined(__i386__) || defined(__arm__) || defined(__aarch64__))) \
         || (defined(__APPLE__)   && (defined(__x86_64__) || defined(__aarch64__))) \
         || (defined(__BIONIC__)  && (defined(__x86_64__) || defined(__i386__) || defined(__arm__) || defined(__aarch64__))) \
@@ -930,6 +940,8 @@ static inline mi_threadid_t _mi_thread_id(void) mi_attr_noexcept {
 
 // otherwise use portable C, taking the address of a thread local variable (this is still very fast on most platforms).
 static inline mi_threadid_t _mi_thread_id(void) mi_attr_noexcept {
+  const volatile int hd = (uintptr_t)&_mi_heap_default;
+  (void)hd;
   return (uintptr_t)&_mi_heap_default;
 }
 
