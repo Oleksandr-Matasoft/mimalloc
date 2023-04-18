@@ -8,14 +8,14 @@ terms of the MIT license. A copy of the license can be found in the file
 #ifndef MIMALLOC_INTERNAL_H
 #define MIMALLOC_INTERNAL_H
 
+#include "mimalloc-types.h"
+#include "mimalloc-track.h"
+
 #ifdef _ZARM64
   #include <zephyr/kernel.h>
 #else
   #include <stdio.h>
 #endif // _ZARM64
-
-#include "mimalloc-types.h"
-#include "mimalloc-track.h"
 
 #if (MI_DEBUG>0)
 #define mi_trace_message(...)  _mi_trace_message(__VA_ARGS__)

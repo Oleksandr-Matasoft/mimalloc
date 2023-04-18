@@ -5,7 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 option(MI_SECURE            "Use full security mitigations (like guard pages, allocation randomization, double-free mitigation, and free-list corruption detection)" OFF)
-option(MI_DEBUG_FULL        "Use full internal heap invariant checking in DEBUG mode (expensive)" OFF)
+option(MI_DEBUG_FULL        "Use full internal heap invariant checking in DEBUG mode (expensive)" ON)
 option(MI_PADDING           "Enable padding to detect heap block overflow (used only in DEBUG mode or with Valgrind)" ON)
 option(MI_OVERRIDE          "Override the standard malloc interface (e.g. define entry points for malloc() etc)" ON)
 option(MI_XMALLOC           "Enable abort() call on memory allocation failure by default" OFF)
@@ -18,10 +18,10 @@ option(MI_OSX_INTERPOSE     "Use interpose to override standard malloc on macOS"
 option(MI_OSX_ZONE          "Use malloc zone to override standard malloc on macOS" ON)
 option(MI_WIN_REDIRECT      "Use redirection module ('mimalloc-redirect') on Windows if compiling mimalloc as a DLL" ON)
 option(MI_LOCAL_DYNAMIC_TLS "Use slightly slower, dlopen-compatible TLS mechanism (Unix)" OFF)
-option(MI_BUILD_SHARED      "Build shared library" ON)
+option(MI_BUILD_SHARED      "Build shared library" OFF)
 option(MI_BUILD_STATIC      "Build static library" ON)
-option(MI_BUILD_OBJECT      "Build object library" ON)
-option(MI_BUILD_TESTS       "Build test executables" ON)
+option(MI_BUILD_OBJECT      "Build object library" OFF)
+option(MI_BUILD_TESTS       "Build test executables" OFF)
 option(MI_DEBUG_TSAN        "Build with thread sanitizer (needs clang)" OFF)
 option(MI_DEBUG_UBSAN       "Build with undefined-behavior sanitizer (needs clang++)" OFF)
 option(MI_SKIP_COLLECT_ON_EXIT, "Skip collecting memory on program exit" OFF)
@@ -358,7 +358,7 @@ message(STATUS "")
 # -----------------------------------------------------------------------------
 
 # shared library
-if(MI_BUILD_SHARED)
+if(0 AND MI_BUILD_SHARED)
   add_library(mimalloc SHARED ${mi_sources})
   set_target_properties(mimalloc PROPERTIES VERSION ${mi_version} SOVERSION ${mi_version_major} OUTPUT_NAME ${mi_basename} )
   target_compile_definitions(mimalloc PRIVATE ${mi_defines} MI_SHARED_LIB MI_SHARED_LIB_EXPORT)
@@ -420,7 +420,7 @@ install(FILES cmake/mimalloc-config-version.cmake DESTINATION ${mi_install_cmake
 
 
 # single object file for more predictable static overriding
-if (MI_BUILD_OBJECT)
+if (0 AND MI_BUILD_OBJECT)
   add_library(mimalloc-obj OBJECT src/static.c)
   set_property(TARGET mimalloc-obj PROPERTY POSITION_INDEPENDENT_CODE ON)
   target_compile_definitions(mimalloc-obj PRIVATE ${mi_defines})
@@ -471,7 +471,7 @@ endif()
 # Set override properties
 # -----------------------------------------------------------------------------
 if (MI_OVERRIDE)
-  if (MI_BUILD_SHARED)
+  if (0 AND MI_BUILD_SHARED)
     target_compile_definitions(mimalloc PRIVATE MI_MALLOC_OVERRIDE)
   endif()
   if(NOT WIN32)
@@ -479,7 +479,7 @@ if (MI_OVERRIDE)
     if (MI_BUILD_STATIC)
       target_compile_definitions(mimalloc-static PRIVATE MI_MALLOC_OVERRIDE)
     endif()
-    if (MI_BUILD_OBJECT)
+    if (0 AND MI_BUILD_OBJECT)
       target_compile_definitions(mimalloc-obj PRIVATE MI_MALLOC_OVERRIDE)
     endif()
   endif()
